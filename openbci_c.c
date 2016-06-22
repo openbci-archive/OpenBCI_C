@@ -35,7 +35,7 @@ void main()
 	int res;														// return of function read(): number of bytes read
 	unsigned char buf[33];							// byte buffer
 	int fd;															// the file descriptor for the serial port
-	struct termios serialportsettings;	// the serial port struct						
+	struct termios serialportsettings;	// the serial port struct					
 	struct sigaction saio;							// Declare signals
 	fd = open(PORT, O_RDWR | O_NOCTTY); // declare serial port file descriptor
 
@@ -75,6 +75,7 @@ void main()
 	// serialportsettings.c_oflag |= OPOST; //causes the output data to be processed in an implementation-defined manner
 
 
+	/* VMIN TO BE CHANGED */
 	// Set the minimum size of packet for read (33 bytes, 0 seconds)
 	serialportsettings.c_cc[VMIN]=33; 						// should initially 1 (during board initialization) but changed to 33 once entering streaming mode
 	serialportsettings.c_cc[VTIME]=0;							// 0 seconds
@@ -86,8 +87,8 @@ void main()
 	saio.sa_flags = 0;														// signal handling
 	saio.sa_restorer = NULL;											// signal handling
 	sigaction(SIGIO,&saio,NULL);									// signal handling
-	tcflush(fd, TCIOFLUSH);												// flush the serail port
-	write(fd,"v",1); 															//reset the board and receive+print board information 
+	tcflush(fd, TCIOFLUSH);												// flush the serial port
+	write(fd,"v",1); 															// reset the board and receive+print board information 
 
 
 	//*******************************************************************************************
@@ -100,7 +101,6 @@ void main()
 		if (wait_flag==FALSE) { 
 			int bytes_available;
 			res = read(fd,&buf,33);										// read 33 bytes from serial and place at buf
-			printf("RES %d",res);
 			byte_parser(buf,res);										// send the read to byte_parser()
 			wait_flag = TRUE;												/* wait for new input */
 		}
@@ -128,7 +128,7 @@ void signal_handler_IO (int status){
 
 // STREAMING BYTE PARSER
 float * byte_parser (unsigned char buf[], int res){
-	static unsigned char framenumber = 0;							// framenumber = sample number from board (0-255)
+	static unsigned char framenumber = -1;							// framenumber = sample number from board (0-255)
 	static int channel_number = 0;										// channel number (0-7)
 	static int acc_channel = 0;												// accelerometer channel (0-2)
 	static int byte_count = 0;												// keeps track of channel bytes as we parse
@@ -162,21 +162,21 @@ float * byte_parser (unsigned char buf[], int res){
 					}
 				break;
 			case 2: 																				// Check framenumber
-					if ((buf[i]-framenumber!= 1) && (buf[i]!=0)){	
+					if (((buf[i]-framenumber)!=1) && (buf[i]==0)){	
 						/* Do something like this to check for missing
-								packets. The above "if" doesn't work, but it
-								should do something similar (computer if the 
-								last packet is one less than the current one). */
+								packets. Keep track of missing packets. */
+								printf("MISSING PACKET \n");
+								sleep(2);
 					}
-					printf("%d\n", framenumber);
+					// printf("%d\n", framenumber);
 					framenumber++;
-					channel_number=0;
 					parse_state++;
 					break;
 			case 3:																					// get ADS channel values **CHANNEL DATA**
 				temp_val |= (((unsigned int)buf[i]) << (16 - (byte_count*8))); //convert to MSB
 				byte_count++;	
 				if (byte_count==3){														// if 3 bytes passed, 24 bit to 32 bit conversion
+					printf("CHANNEL NO. %d\n", channel_number + 1);
 					if ((temp_val & 0x00800000) > 0) {
 						temp_val |= 0xFF000000;
 					}else{
@@ -184,12 +184,12 @@ float * byte_parser (unsigned char buf[], int res){
 					}
 					// temp_val = (4.5 / 24 / float((pow(2, 23) - 1)) * 1000000.f) * temp_val; // convert from count to bytes
 					output[channel_number] = temp_val;					// place value into data output buffer
-					printf("CHANNEL NO. %d\n", channel_number);
 					channel_number++;
 					if (channel_number==8){											// check to see if 8 channels have already been parsed
 						parse_state++;
 						byte_count = 0;
 						temp_val = 0;
+						acc_channel = 0;
 					}else{
 						byte_count = 0;
 						temp_val = 0;
@@ -205,10 +205,11 @@ float * byte_parser (unsigned char buf[], int res){
 					} else {
 						temp_val &= 0x0000FFFF;
 					}  
-					// output[acc_channel+8]=temp_val;				// output onto buffer
+					// printf("channel no %d\n", channel_number);
+					printf("acc channel %d\n", acc_channel);
+					output[acc_channel + 8]=temp_val;				// output onto buffer
 					acc_channel++;
-					channel_number++;
-					if (channel_number==(8+3)) {  						// all channels arrived !
+					if (acc_channel==3) {  						// all channels arrived !
 						parse_state++;
 						byte_count=0;
 						channel_number=0;
@@ -219,6 +220,10 @@ float * byte_parser (unsigned char buf[], int res){
 				break;
 
 			case 5: 																			// look for end byte
+				// for (int i=0;i<sizeof(output);i++){
+				// 	printf("%d %d | ", i, output[i]);
+				// }
+				// printf("\n");
 				if (buf[i] == 0xC0){
 					// call message pump???
 					parse_state = 0;
