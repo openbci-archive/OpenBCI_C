@@ -166,7 +166,7 @@ float * byte_parser (unsigned char buf[], int res){
 						/* Do something like this to check for missing
 								packets. Keep track of missing packets. */
 						printf("MISSING PACKET \n");
-=					}
+					}
 					framenumber++;
 					parse_state++;
 					break;
