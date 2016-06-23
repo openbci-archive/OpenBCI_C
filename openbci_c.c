@@ -9,7 +9,7 @@ This program provides serial port communication with the OpenBCI Board.
 #include <termios.h>				// POSIX terminal control definitions
 #include <fcntl.h>					// File Control definitions
 #include <unistd.h>					// UNIX standard function definitions
-#include <errno.h>					//
+#include <errno.h>					
 #include <sys/signal.h>
 #include <sys/types.h>
 #include <math.h>
@@ -24,20 +24,20 @@ volatile int STOP=FALSE;
 
 
 void signal_handler_IO (int status);  							 // definition of signal handler */
-void init_byte_parser(unsigned char buf[], int res); //method to parse the bytes during initialization
-float * byte_parser (unsigned char buf[], int res); // methoD to parse the bytes while streaming
-int wait_flag=FALSE;    														// signalling
-int streaming = 1;																	// used to switch parsing between initialization mode and streaming mode
+void init_byte_parser(unsigned char buf[], int res); 			//method to parse the bytes during initialization
+float * byte_parser (unsigned char buf[], int res); 			// method to parse the bytes while streaming
+int wait_flag=FALSE;    										// signalling
+int streaming = 1;												// used to switch parsing between initialization mode and streaming mode
 
 void main()
 {
 	int c;								
-	int res;														// return of function read(): number of bytes read
-	unsigned char buf[33];							// byte buffer
-	int fd;															// the file descriptor for the serial port
-	struct termios serialportsettings;	// the serial port struct					
-	struct sigaction saio;							// Declare signals
-	fd = open(PORT, O_RDWR | O_NOCTTY); // declare serial port file descriptor
+	int res;													// return of function read(): number of bytes read
+	unsigned char buf[33];										// byte buffer
+	int fd;														// the file descriptor for the serial port
+	struct termios serialportsettings;							// the serial port struct					
+	struct sigaction saio;										// Declare signals
+	fd = open(PORT, O_RDWR | O_NOCTTY); 						// declare serial port file descriptor
 
 	/******************************************************************************************
 	//	SERIAL PORT SETUP 
@@ -52,43 +52,43 @@ void main()
 		printf("\n ttyUSB0 Opened Successfully\n");
 
 	/* Baud Rate Information (Baud=115200) */
-	cfsetispeed(&serialportsettings,B115200);		// set the input baud rate
-	cfsetospeed(&serialportsettings,B115200);		// set the output baud rate	
+	cfsetispeed(&serialportsettings,B115200);					// set the input baud rate
+	cfsetospeed(&serialportsettings,B115200);					// set the output baud rate	
 
 
 	/* Flags */
 	//Hardware Information Flags
-	serialportsettings.c_cflag &= ~PARENB;				// set the parity bit (none)
-	serialportsettings.c_cflag &= ~CSTOPB;				// # of stop bits = 1 (2 is default)
-	serialportsettings.c_cflag &= ~CSIZE;					// clears the mask
-	serialportsettings.c_cflag |= CS8;						// set the # of data bits = 8
-	serialportsettings.c_cflag &= ~CRTSCTS;				// no hardware based flow control (RTS/CTS)
-	serialportsettings.c_cflag |= CREAD;					// turn on the receiver of the serial port (CREAD)
-	serialportsettings.c_cflag |= CLOCAL;					// no modem
+	serialportsettings.c_cflag &= ~PARENB;						// set the parity bit (none)
+	serialportsettings.c_cflag &= ~CSTOPB;						// # of stop bits = 1 (2 is default)
+	serialportsettings.c_cflag &= ~CSIZE;						// clears the mask
+	serialportsettings.c_cflag |= CS8;							// set the # of data bits = 8
+	serialportsettings.c_cflag &= ~CRTSCTS;						// no hardware based flow control (RTS/CTS)
+	serialportsettings.c_cflag |= CREAD;						// turn on the receiver of the serial port (CREAD)
+	serialportsettings.c_cflag |= CLOCAL;						// no modem
 	//Input Data Flags
-	serialportsettings.c_iflag &= ~(IXOFF | IXON);	//ignore 'XOFF' and 'XON' command bits (fixes a bug where the parser skips '0x11' and '0x13')
+	serialportsettings.c_iflag &= ~(IXOFF | IXON);				//ignore 'XOFF' and 'XON' command bits (fixes a bug where the parser skips '0x11' and '0x13')
 	// serialportsettings.c_iflag |= IGNBRK;
 	// serialportsettings.c_iflag &= ~(BRKINT | IGNPAR | PARMRK | INPCK | ISTRIP | INLCR | IGNCR | ICRNL | IXON);
 	//Echoing and character processing flags
 	// serialportsettings.c_lflag &= ~(ICANON | ECHO | ECHOE | ISIG); //no echoing, input proc, signals, or background proc halting
 	//Output data flags ("for ")
-	// serialportsettings.c_oflag |= OPOST; //causes the output data to be processed in an implementation-defined manner
+	// serialportsettings.c_oflag |= OPOST;						 //causes the output data to be processed in an implementation-defined manner
 
 
 	/* VMIN TO BE CHANGED */
 	// Set the minimum size of packet for read (33 bytes, 0 seconds)
-	serialportsettings.c_cc[VMIN]=33; 						// should initially 1 (during board initialization) but changed to 33 once entering streaming mode
+	serialportsettings.c_cc[VMIN]=33; 							// should initially 1 (during board initialization) but changed to 33 once entering streaming mode
 	serialportsettings.c_cc[VTIME]=0;							// 0 seconds
 	
 
-	fcntl(fd, F_SETFL, O_NDELAY|O_ASYNC );				// asynchronous settings
-	tcsetattr(fd,TCSANOW,&serialportsettings); 		// set the above attributes
-	saio.sa_handler = signal_handler_IO;					// signal handling
-	saio.sa_flags = 0;														// signal handling
-	saio.sa_restorer = NULL;											// signal handling
-	sigaction(SIGIO,&saio,NULL);									// signal handling
-	tcflush(fd, TCIOFLUSH);												// flush the serial port
-	write(fd,"v",1); 															// reset the board and receive+print board information 
+	fcntl(fd, F_SETFL, O_NDELAY|O_ASYNC );						// asynchronous settings
+	tcsetattr(fd,TCSANOW,&serialportsettings); 					// set the above attributes
+	saio.sa_handler = signal_handler_IO;						// signal handling
+	saio.sa_flags = 0;											// signal handling
+	saio.sa_restorer = NULL;									// signal handling
+	sigaction(SIGIO,&saio,NULL);								// signal handling
+	tcflush(fd, TCIOFLUSH);										// flush the serial port
+	write(fd,"v",1); 											// reset the board and receive+print board information by sending a "v" command
 
 
 	//*******************************************************************************************
@@ -100,9 +100,9 @@ void main()
 		// signal
 		if (wait_flag==FALSE) { 
 			int bytes_available;
-			res = read(fd,&buf,33);										// read 33 bytes from serial and place at buf
-			byte_parser(buf,res);										// send the read to byte_parser()
-			wait_flag = TRUE;												/* wait for new input */
+			res = read(fd,&buf,33);								// read 33 bytes from serial and place at buf
+			byte_parser(buf,res);								// send the read to byte_parser()
+			wait_flag = TRUE;									/* wait for new input */
 		}
 	}
 
@@ -128,54 +128,52 @@ void signal_handler_IO (int status){
 
 // STREAMING BYTE PARSER
 float * byte_parser (unsigned char buf[], int res){
-	static unsigned char framenumber = -1;							// framenumber = sample number from board (0-255)
-	static int channel_number = 0;										// channel number (0-7)
-	static int acc_channel = 0;												// accelerometer channel (0-2)
-	static int byte_count = 0;												// keeps track of channel bytes as we parse
-	static int temp_val = 0;													// holds the value while converting channel values from 24 to 32 bit integers
-	static float output[11];													// buffer to hold the output of the parse (all -data- bytes of one sample)
-	int parse_state = 0;															// state of the parse machine (0-5)
+	static unsigned char framenumber = -1;						// framenumber = sample number from board (0-255)
+	static int channel_number = 0;								// channel number (0-7)
+	static int acc_channel = 0;									// accelerometer channel (0-2)
+	static int byte_count = 0;									// keeps track of channel bytes as we parse
+	static int temp_val = 0;									// holds the value while converting channel values from 24 to 32 bit integers
+	static float output[11];									// buffer to hold the output of the parse (all -data- bytes of one sample)
+	int parse_state = 0;										// state of the parse machine (0-5)
 	printf("######### NEW PACKET ##############\n");
-	for (int i=0; i<res;i++){													// iterate over the contents of a packet
-		printf("%d |", i);															// print byte number (0-33)
+	for (int i=0; i<res;i++){									// iterate over the contents of a packet
+		printf("%d |", i);										// print byte number (0-33)
 		printf("PARSE STATE %d | ", parse_state);				// print current parse state
-		printf("BYTE %x\n",buf[i]);											// print value of byte
+		printf("BYTE %x\n",buf[i]);								// print value of byte
 
 		/**************************************************************
 		// STATE MACHINE
 		//
 		*/
 		switch (parse_state) {
-			case 0:																				// STATE 0: find end+beginning byte
-				if (buf[i] == 0xC0){												// if finds end byte first, look for beginning byte next
+			case 0:												// STATE 0: find end+beginning byte
+				if (buf[i] == 0xC0){							// if finds end byte first, look for beginning byte next
 					parse_state++;								
 				}
-				else if (buf[i] == 0xA0){										// if find beginning byte first, proceed to parsing sample number (state 2)
+				else if (buf[i] == 0xA0){						// if find beginning byte first, proceed to parsing sample number (state 2)
 					parse_state = 2;													
 				}
 				break;
-			case 1:																				// STATE 1: Look for header (in case C0 found first)
+			case 1:												// STATE 1: Look for header (in case C0 found first)
 					if (buf[i] == 0xA0){
 						parse_state++;
 					}else{
 						parse_state = 0;
 					}
 				break;
-			case 2: 																				// Check framenumber
+			case 2: 											// Check framenumber
 					if (((buf[i]-framenumber)!=1) && (buf[i]==0)){	
 						/* Do something like this to check for missing
 								packets. Keep track of missing packets. */
-								printf("MISSING PACKET \n");
-								sleep(2);
-					}
-					// printf("%d\n", framenumber);
+						printf("MISSING PACKET \n");
+=					}
 					framenumber++;
 					parse_state++;
 					break;
-			case 3:																					// get ADS channel values **CHANNEL DATA**
+			case 3:												// get ADS channel values **CHANNEL DATA**
 				temp_val |= (((unsigned int)buf[i]) << (16 - (byte_count*8))); //convert to MSB
 				byte_count++;	
-				if (byte_count==3){														// if 3 bytes passed, 24 bit to 32 bit conversion
+				if (byte_count==3){								// if 3 bytes passed, 24 bit to 32 bit conversion
 					printf("CHANNEL NO. %d\n", channel_number + 1);
 					if ((temp_val & 0x00800000) > 0) {
 						temp_val |= 0xFF000000;
@@ -183,9 +181,9 @@ float * byte_parser (unsigned char buf[], int res){
 						temp_val &= 0x00FFFFFF;
 					}
 					// temp_val = (4.5 / 24 / float((pow(2, 23) - 1)) * 1000000.f) * temp_val; // convert from count to bytes
-					output[channel_number] = temp_val;					// place value into data output buffer
+					output[channel_number] = temp_val;			// place value into data output buffer
 					channel_number++;
-					if (channel_number==8){											// check to see if 8 channels have already been parsed
+					if (channel_number==8){						// check to see if 8 channels have already been parsed
 						parse_state++;
 						byte_count = 0;
 						temp_val = 0;
@@ -196,7 +194,7 @@ float * byte_parser (unsigned char buf[], int res){
 					}
 				}
 				break;
-			case 4:																					// get LIS3DH channel values 2 bytes times 3 axes **ACCELEROMETER**
+			case 4:												// get LIS3DH channel values 2 bytes times 3 axes **ACCELEROMETER**
 				temp_val |= (((unsigned int)buf[i]) << (8 - (byte_count*8)));
 				byte_count++;
 				if (byte_count==2) {
@@ -207,7 +205,7 @@ float * byte_parser (unsigned char buf[], int res){
 					}  
 					// printf("channel no %d\n", channel_number);
 					printf("acc channel %d\n", acc_channel);
-					output[acc_channel + 8]=temp_val;				// output onto buffer
+					output[acc_channel + 8]=temp_val;			// output onto buffer
 					acc_channel++;
 					if (acc_channel==3) {  						// all channels arrived !
 						parse_state++;
@@ -219,23 +217,17 @@ float * byte_parser (unsigned char buf[], int res){
 				}
 				break;
 
-			case 5: 																			// look for end byte
-				// for (int i=0;i<sizeof(output);i++){
-				// 	printf("%d %d | ", i, output[i]);
-				// }
-				// printf("\n");
+			case 5: 											// look for end byte
 				if (buf[i] == 0xC0){
-					// call message pump???
 					parse_state = 0;
 				}
 				else{
-					// Insert something about synching here
-					printf("CATCH UP!\n");
-					parse_state= 0;	// resync
+					// something about synching here
+					parse_state= 0;								// resync
 				}
 				break;
 
-		default: parse_state=0;  // resync		}
+		default: parse_state=0;		
 		}
 	}
 	return output;
