@@ -31,6 +31,7 @@ void byte_parser(unsigned char buf[], int res);
 void open_port();
 void setup_port();
 void streaming();
+void clear_buffer();
 void shift_buffer_down();
 int close_port();
 int send_to_board(char* message);
@@ -116,7 +117,7 @@ void streaming(){
     if (isStreaming==FALSE) { 
       res = read(fd,buf,1);                            // read 33 bytes from serial and place at buf
       if(res > 0) bufferVal = bufferHandler(buf,isStreaming);
-	  
+      
       if(bufferVal == 1) printString();
       else if(bufferVal == 2) ; //char was sent... may be useful in the future
       else if(bufferVal == 3) isStreaming = TRUE; // a packet was sent. parse it 
@@ -127,14 +128,15 @@ void streaming(){
    else if(isStreaming ==TRUE){
      res = read(fd, buf,1);
      if(res > 0) {
-	howLong = 0;
-	bufferHandler(buf,isStreaming);
+       howLong = 0;
+       bufferHandler(buf,isStreaming);
 
-	if(numBytesAdded >= 33) byte_parser(parseBuffer,33);
+       if(numBytesAdded >= 33) byte_parser(parseBuffer,33);
      }
-     else if (howLong < -1000){
-	 
-	 isStreaming == FALSE;
+
+     else if (howLong < -100000){
+       clear_buffer();  
+       isStreaming = FALSE;
      }
      else howLong += res;
    }
@@ -143,6 +145,7 @@ void streaming(){
 
     close_port();
 }
+
 
 /* CLOSE SERIAL PORT */
 int close_port(){
@@ -161,38 +164,38 @@ void signal_handler_IO (int status){
 
 /** BUFFER HANDLER
 
-	Places data from the serial buffer to the parseBuffer for more parsing (and to prevent data loss)
+    Places data from the serial buffer to the parseBuffer for more parsing (and to prevent data loss)
 
-	returns...
-		- 1 if a string was recently sent
-		- 2 if a char was sent (may be useful for malformed packet debugging). Includes newline characters and spaces
-		- 3 if a start byte was sent (0xA0)
-		- 0 for other data
+    returns...
+        - 1 if a string was recently sent
+        - 2 if a char was sent (may be useful for malformed packet debugging). Includes newline characters and spaces
+        - 3 if a start byte was sent (0xA0)
+        - 0 for other data
 **/
 
 
 int bufferHandler(unsigned char buf[],int isStreaming){
 
-	if(isStreaming == FALSE){
-		parseBuffer[lastIndex] = buf[0];
-		lastIndex++;
-		
-		if(buf[0] == '$'){
-		  //there's a string coming in the future... need 3 though to print it.
-		  dollaBills++;
-		}
-		else if(buf[0] != '$' && dollaBills > 0) dollaBills = 0; //Keeps them dolla bills in check :^)
+    if(isStreaming == FALSE){
+        parseBuffer[lastIndex] = buf[0];
+        lastIndex++;
+        
+        if(buf[0] == '$'){
+          //there's a string coming in the future... need 3 though to print it.
+          dollaBills++;
+        }
+        else if(buf[0] != '$' && dollaBills > 0) dollaBills = 0; //Keeps them dolla bills in check :^)
 
-		if(dollaBills == 3){dollaBills = 0; return 1;} //must have printed a string...
-		else if(isalpha(buf[0]) || buf[0] == '\n' || buf[0] == ' ') return 2;
-		else if(buf[0] == 0xA0) return 3;
-		else return 0;
-	}
-	else if(isStreaming == TRUE){
-		parseBuffer[lastIndex] = buf[0];
-		lastIndex++;
-		numBytesAdded++;
-	}
+        if(dollaBills == 3){dollaBills = 0; return 1;} //must have printed a string...
+        else if(isalpha(buf[0]) || buf[0] == '\n' || buf[0] == ' ') return 2;
+        else if(buf[0] == 0xA0) return 3;
+        else return 0;
+    }
+    else if(isStreaming == TRUE){
+        parseBuffer[lastIndex] = buf[0];
+        lastIndex++;
+        numBytesAdded++;
+    }
 
 }
 
@@ -200,24 +203,33 @@ int bufferHandler(unsigned char buf[],int isStreaming){
 /** Prints strings and removes the chars from parseBuffer **/
 
 void printString(){
-	int index = 0;
-	
-	while(parseBuffer[index] != '\0'){ printf("%c",parseBuffer[index]); index++;}
-	printf("\n");
-	for(int i = 0; i <= index; i++) parseBuffer[i] = '\0';
-	lastIndex = 0;
-	//if(parseBuffer[0] == '\0') printf("This could be a problem...\n");	
+    int index = 0;
+    
+    while(parseBuffer[index] != '\0'){ printf("%c",parseBuffer[index]); index++;}
+    printf("\n");
+    for(int i = 0; i <= index; i++) parseBuffer[i] = '\0';
+    lastIndex = 0;
+    //if(parseBuffer[0] == '\0') printf("This could be a problem...\n");    
 }
 
 
+/* Shifts the buffer down by 1 index, clears the last index*/
 void shift_buffer_down(){
 
-	for(int i = 0; i < lastIndex; i++) parseBuffer[i] = parseBuffer[i + 1];
-	parseBuffer[lastIndex] = '\0';	
-	lastIndex--;
-	numBytesAdded--;
-	
+    for(int i = 0; i < lastIndex; i++) parseBuffer[i] = parseBuffer[i + 1];
+    parseBuffer[lastIndex] = '\0';  
+    lastIndex--;
+    numBytesAdded--;
+    
 }
+
+/* Clears the buffer */
+void clear_buffer(){
+    for(int i = 0; i <= lastIndex; i++) parseBuffer[i] = '\0';
+    lastIndex = 0;
+    numBytesAdded = 0;
+}
+
 
 
 /* Byte Parser */
@@ -241,73 +253,73 @@ void byte_parser (unsigned char buf[], int res){
   while(is_parsing == TRUE){
     switch(parse_state){
 
-	case 1:
-		shift_buffer_down();
-	
-  		printf("######### NEW PACKET ##############\n");
-		int sample_num = parseBuffer[0];
-		printf("\nSAMPLE NUMBER %i\n",sample_num);
-		parse_state++;
-	
-		break;
+    case 1:
+        shift_buffer_down();
+    
+        printf("######### NEW PACKET ##############\n");
+        int sample_num = parseBuffer[0];
+        printf("\nSAMPLE NUMBER %i\n",sample_num);
+        parse_state++;
+    
+        break;
 
-	case 2:
-		shift_buffer_down();
-		temp_val |= (((unsigned int)parseBuffer[0]) << (16 - (byte_count*8)));
-		byte_count++;
-		if(byte_count == 3){
+    case 2:
+        shift_buffer_down();
+        temp_val |= (((unsigned int)parseBuffer[0]) << (16 - (byte_count*8)));
+        byte_count++;
+        if(byte_count == 3){
 
-			if((temp_val & 0x00800000) > 0){
-		            temp_val |= 0xFF000000;
-		        }
-		        else temp_val &= 0x00FFFFFF;
-			
-			printf("Channel Number %i : %i\n", channel_number + 1, temp_val);
+            if((temp_val & 0x00800000) > 0){
+                    temp_val |= 0xFF000000;
+                }
+                else temp_val &= 0x00FFFFFF;
+            
+            printf("Channel Number %i : %i\n", channel_number + 1, temp_val);
 
-			channel_number++;
+            channel_number++;
 
-			if(channel_number == 8){
-				parse_state++;
-				byte_count = 0;
-				temp_val = 0;
-				acc_channel = 0;
-			}
-			else{
-				byte_count = 0;
-				temp_val = 0;
-			}
+            if(channel_number == 8){
+                parse_state++;
+                byte_count = 0;
+                temp_val = 0;
+                acc_channel = 0;
+            }
+            else{
+                byte_count = 0;
+                temp_val = 0;
+            }
 
 
-		}
-		break;
+        }
+        break;
 
-	case 3:
-		shift_buffer_down();
-		temp_val |= (((unsigned int)parseBuffer[0]) << (8 - (byte_count*8)));
-		byte_count++;
+    case 3:
+        shift_buffer_down();
+        temp_val |= (((unsigned int)parseBuffer[0]) << (8 - (byte_count*8)));
+        byte_count++;
 
-		if (byte_count==2) {
-		  if ((temp_val & 0x00008000) > 0) {
-		    temp_val |= 0xFFFF0000;
-		  } else {
-		    temp_val &= 0x0000FFFF;
-		  }
+        if (byte_count==2) {
+          if ((temp_val & 0x00008000) > 0) {
+            temp_val |= 0xFFFF0000;
+          } else {
+            temp_val &= 0x0000FFFF;
+          }
 
-		  printf("acc channel %d : %i\n", acc_channel, temp_val);
-		  output[acc_channel + 8]=temp_val;           // output onto buffer
-		  acc_channel++;
-		if (acc_channel==3) {                       // all channels arrived !
-		  parse_state++;
-		  byte_count=0;
-		  channel_number=0;
-		  temp_val=0;
-		}else { byte_count=0; temp_val=0; }
-		  }
-		break;
+          printf("acc channel %d : %i\n", acc_channel, temp_val);
+          output[acc_channel + 8]=temp_val;           // output onto buffer
+          acc_channel++;
+        if (acc_channel==3) {                       // all channels arrived !
+          parse_state++;
+          byte_count=0;
+          channel_number=0;
+          temp_val=0;
+        }else { byte_count=0; temp_val=0; }
+          }
+        break;
 
-	case 4:
-		shift_buffer_down();
-		if(parseBuffer[0] == 0xC0) is_parsing=FALSE;
+    case 4:
+        shift_buffer_down();
+        if(parseBuffer[0] == 0xC0) is_parsing=FALSE;
     }
 
 
