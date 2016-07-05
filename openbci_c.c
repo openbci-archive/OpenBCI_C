@@ -115,13 +115,7 @@ void streaming(){
     // signal
     if (isStreaming==FALSE) { 
       res = read(fd,buf,1);                            // read 33 bytes from serial and place at buf
-      //printf("%d",res);
-      if(res > 0){
-		bufferVal = bufferHandler(buf,isStreaming);
-        //byte_parser(*buf,res);                             // send the read to byte_parser()
-        // memset(buf,0,res);
-        //wait_flag = TRUE;                                 // wait for new input //
-      }
+      if(res > 0) bufferVal = bufferHandler(buf,isStreaming);
 	  
       if(bufferVal == 1) printString();
       else if(bufferVal == 2) ; //char was sent... may be useful in the future
@@ -138,7 +132,10 @@ void streaming(){
 
 	if(numBytesAdded >= 33) byte_parser(parseBuffer,33);
      }
-     else if (howLong < -1000) isStreaming == FALSE;
+     else if (howLong < -1000){
+	 
+	 isStreaming == FALSE;
+     }
      else howLong += res;
    }
   }
@@ -169,30 +166,16 @@ void signal_handler_IO (int status){
 	returns...
 		- 1 if a string was recently sent
 		- 2 if a char was sent (may be useful for malformed packet debugging). Includes newline characters and spaces
-		- 3 if a start byte was sent (0xC0)
-		- 4 if an end byte was sent (0xC0)
+		- 3 if a start byte was sent (0xA0)
 		- 0 for other data
 **/
 
 
 int bufferHandler(unsigned char buf[],int isStreaming){
-//	if(buf[0] == '\n') printf("\nOriginal : newline ");
-//	else printf("\nOriginal: %c ",buf[0]);
 
 	if(isStreaming == FALSE){
 		parseBuffer[lastIndex] = buf[0];
 		lastIndex++;
-		
-		/*
-		for(int i = 0; i < BUFFERSIZE - 1; i++){
-		  if(parseBuffer[i] == '\0'){ 
-			parseBuffer[i] = buf[0];
-	//		if(parseBuffer[i] == '\n') printf(" parseBufferVal : newline \n");
-	//		else printf(" parseBufferVal: %c \n",parseBuffer[i]); 
-			break;}
-		  else if(i == BUFFERSIZE - 1) ; //For future debugging, could be an overflow here.
-
-		}*/
 		
 		if(buf[0] == '$'){
 		  //there's a string coming in the future... need 3 though to print it.
@@ -206,7 +189,6 @@ int bufferHandler(unsigned char buf[],int isStreaming){
 		else return 0;
 	}
 	else if(isStreaming == TRUE){
-	//	for(int i = 0; i < BUFFERSIZE - 1; i++)
 		parseBuffer[lastIndex] = buf[0];
 		lastIndex++;
 		numBytesAdded++;
