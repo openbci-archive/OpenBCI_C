@@ -27,10 +27,11 @@ volatile int STOP=FALSE;
 
 /*Function declarations*/
 void signal_handler_IO (int status);
-void byte_parser();
+void byte_parser(unsigned char buf[], int res);
 void open_port();
 void setup_port();
 void streaming();
+void shift_buffer_down();
 int close_port();
 int send_to_board(char* message);
 
@@ -38,7 +39,9 @@ int send_to_board(char* message);
 int fd;                                                        // Serial port file descriptor
 char* port;
 int wait_flag=FALSE;                                           // Signal handler wait flag
-//unsigned char buf[1]; turned local, will be overwritten at every read anyway   // Buffer to holder reads
+int numBytesAdded = 0;
+int lastIndex = 0;
+
 struct termios serialportsettings;                             // Serial port settings
 struct sigaction saio;                                         // Signal handler            
 
@@ -46,7 +49,7 @@ unsigned char parseBuffer[BUFFERSIZE] = {'\0'}; //pipe will indicate an empty va
 
 int dollaBills = 0;
 
-int bufferHandler(unsigned char buf[]);
+int bufferHandler(unsigned char buf[],int isStreaming);
 void printString();
 void main(){
   port = "/dev/ttyUSB0";
@@ -104,25 +107,40 @@ void setup_port(){
 void streaming(){
   int res;
   unsigned char buf[1];
+  int isStreaming = FALSE;
+  int howLong = 0;
   int bufferVal = 0; //the value returned by bufferHandler
   /* Streaming loop */
   while (STOP==FALSE) {
     // signal
-    //if (wait_flag==FALSE) { 
+    if (isStreaming==FALSE) { 
       res = read(fd,buf,1);                            // read 33 bytes from serial and place at buf
       //printf("%d",res);
       if(res > 0){
-		bufferVal = bufferHandler(buf);
+		bufferVal = bufferHandler(buf,isStreaming);
         //byte_parser(*buf,res);                             // send the read to byte_parser()
         // memset(buf,0,res);
         //wait_flag = TRUE;                                 // wait for new input //
       }
 	  
-	  if(bufferVal == 1) printString();
-	  else if(bufferVal == 2) ; //char was sent... may be useful in the future
-	  else if(bufferVal == 3) byte_parser(); // a packet was sent. parse it 
-	  bufferVal = 0;
-    //}
+      if(bufferVal == 1) printString();
+      else if(bufferVal == 2) ; //char was sent... may be useful in the future
+      else if(bufferVal == 3) isStreaming = TRUE; // a packet was sent. parse it 
+      bufferVal = 0;
+
+
+    }
+   else if(isStreaming ==TRUE){
+     res = read(fd, buf,1);
+     if(res > 0) {
+	howLong = 0;
+	bufferHandler(buf,isStreaming);
+
+	if(numBytesAdded >= 33) byte_parser(parseBuffer,33);
+     }
+     else if (howLong < -1000) isStreaming == FALSE;
+     else howLong += res;
+   }
   }
 
 
@@ -151,36 +169,48 @@ void signal_handler_IO (int status){
 	returns...
 		- 1 if a string was recently sent
 		- 2 if a char was sent (may be useful for malformed packet debugging). Includes newline characters and spaces
-		- 3 if an end byte was sent (0xC0)
+		- 3 if a start byte was sent (0xC0)
+		- 4 if an end byte was sent (0xC0)
 		- 0 for other data
 **/
 
 
-int bufferHandler(unsigned char buf[]){
+int bufferHandler(unsigned char buf[],int isStreaming){
 //	if(buf[0] == '\n') printf("\nOriginal : newline ");
 //	else printf("\nOriginal: %c ",buf[0]);
 
-	for(int i = 0; i < BUFFERSIZE - 1; i++){
-	  if(parseBuffer[i] == '\0'){ 
-		parseBuffer[i] = buf[0];
-//		if(parseBuffer[i] == '\n') printf(" parseBufferVal : newline \n");
-//		else printf(" parseBufferVal: %c \n",parseBuffer[i]); 
-		break;}
-	  else if(i == BUFFERSIZE - 1) ; //For future debugging, could be an overflow here.
+	if(isStreaming == FALSE){
+		parseBuffer[lastIndex] = buf[0];
+		lastIndex++;
+		
+		/*
+		for(int i = 0; i < BUFFERSIZE - 1; i++){
+		  if(parseBuffer[i] == '\0'){ 
+			parseBuffer[i] = buf[0];
+	//		if(parseBuffer[i] == '\n') printf(" parseBufferVal : newline \n");
+	//		else printf(" parseBufferVal: %c \n",parseBuffer[i]); 
+			break;}
+		  else if(i == BUFFERSIZE - 1) ; //For future debugging, could be an overflow here.
 
+		}*/
+		
+		if(buf[0] == '$'){
+		  //there's a string coming in the future... need 3 though to print it.
+		  dollaBills++;
+		}
+		else if(buf[0] != '$' && dollaBills > 0) dollaBills = 0; //Keeps them dolla bills in check :^)
+
+		if(dollaBills == 3){dollaBills = 0; return 1;} //must have printed a string...
+		else if(isalpha(buf[0]) || buf[0] == '\n' || buf[0] == ' ') return 2;
+		else if(buf[0] == 0xA0) return 3;
+		else return 0;
 	}
-	
-	if(buf[0] == '$'){
-	  //there's a string coming in the future... need 3 though to print it.
-	  dollaBills++;
+	else if(isStreaming == TRUE){
+	//	for(int i = 0; i < BUFFERSIZE - 1; i++)
+		parseBuffer[lastIndex] = buf[0];
+		lastIndex++;
+		numBytesAdded++;
 	}
-	else if(buf[0] != '$' && dollaBills > 0) dollaBills = 0; //Keeps them dolla bills in check :^)
-
-	if(dollaBills == 3){dollaBills = 0; return 1;} //must have printed a string...
-	else if(isalpha(buf[0]) || buf[0] == '\n' || buf[0] == ' ') return 2;
-	else if(buf[0] == 0xC0) return 3;
-	else return 0;
-
 
 }
 
@@ -193,14 +223,23 @@ void printString(){
 	while(parseBuffer[index] != '\0'){ printf("%c",parseBuffer[index]); index++;}
 	printf("\n");
 	for(int i = 0; i <= index; i++) parseBuffer[i] = '\0';
-
-	if(parseBuffer[0] == '\0') printf("This could be a problem...\n");	
+	lastIndex = 0;
+	//if(parseBuffer[0] == '\0') printf("This could be a problem...\n");	
 }
 
 
+void shift_buffer_down(){
+
+	for(int i = 0; i < lastIndex; i++) parseBuffer[i] = parseBuffer[i + 1];
+	parseBuffer[lastIndex] = '\0';	
+	lastIndex--;
+	numBytesAdded--;
+	
+}
+
 
 /* Byte Parser */
-void byte_parser (){
+void byte_parser (unsigned char buf[], int res){
   static unsigned char framenumber = -1;                      // framenumber = sample number from board (0-255)
   static int channel_number = 0;                              // channel number (0-7)
   static int acc_channel = 0;                                 // accelerometer channel (0-2)
@@ -208,98 +247,90 @@ void byte_parser (){
   static int temp_val = 0;                                    // holds the value while converting channel values from 24 to 32 bit integers
   static float output[11];                                    // buffer to hold the output of the parse (all -data- bytes of one sample)
   int parse_state = 0;                                        // state of the parse machine (0-5)
+  int is_parsing = TRUE; 
+
+
+ 
+  if(buf[0] != 0xA0){ shift_buffer_down(); is_parsing=FALSE; }
+  else if(buf[0] == 0xA0) parse_state = 1;
+
+
   
-  printf("######### NEW PACKET ##############\n");
-  for (int i=0; i<res;i++){                                   // iterate over the contents of a packet
-    printf("%d |", i);                                        // print byte number (0-33)
-    printf("PARSE STATE %d | ", parse_state);                 // print current parse state
-    printf("BYTE %x\n",buf[i]);                               // print value of byte
+  while(is_parsing == TRUE){
+    switch(parse_state){
 
-    /* Parser State Machine */
-    switch (parse_state) {
-      case 0:                                             // STATE 0: find end+beginning byte
-        if (buf[i] == 0xC0){                            // if finds end byte first, look for beginning byte next
-          parse_state++;                              
-        }
-        else if (buf[i] == 0xA0){                       // if find beginning byte first, proceed to parsing sample number (state 2)
-          parse_state = 2;                                                    
-        }
-        break;
-      case 1:                                             // STATE 1: Look for header (in case C0 found first)
-        if (buf[i] == 0xA0){
-          parse_state++;
-        }else{
-          parse_state = 0;
-        }
-        break;
-      case 2:                                             // Check framenumber
-        if (((buf[i]-framenumber)!=1) && (buf[i]==0)){  
-          /* Do something like this to check for missing
-                  packets. Keep track of missing packets. */
-          printf("MISSING PACKET \n");
-        }
-        framenumber++;
-        parse_state++;
-        break;
-      case 3:                                             // get ADS channel values **CHANNEL DATA**
-        temp_val |= (((unsigned int)buf[i]) << (16 - (byte_count*8))); //convert to MSB
-        byte_count++;   
-        if (byte_count==3){                             // if 3 bytes passed, 24 bit to 32 bit conversion
-            printf("CHANNEL NO. %d\n", channel_number + 1);
-            if ((temp_val & 0x00800000) > 0) {
-                temp_val |= 0xFF000000;
-            }else{
-                temp_val &= 0x00FFFFFF;
-            }
-            // temp_val = (4.5 / 24 / float((pow(2, 23) - 1)) * 1000000.f) * temp_val; // convert from count to bytes
-            output[channel_number] = temp_val;          // place value into data output buffer
-            channel_number++;
-            if (channel_number==8){                     // check to see if 8 channels have already been parsed
-                parse_state++;
-                byte_count = 0;
-                temp_val = 0;
-                acc_channel = 0;
-            }else{
-                byte_count = 0;
-                temp_val = 0;
-            }
-        }
-        break;
-      case 4:                                             // get LIS3DH channel values 2 bytes times 3 axes **ACCELEROMETER**
-        temp_val |= (((unsigned int)buf[i]) << (8 - (byte_count*8)));
-        byte_count++;
-        if (byte_count==2) {
-          if ((temp_val & 0x00008000) > 0) {
-            temp_val |= 0xFFFF0000;
-          } else {
-            temp_val &= 0x0000FFFF;
-          }  
-          // printf("channel no %d\n", channel_number);
-          printf("acc channel %d\n", acc_channel);
-          output[acc_channel + 8]=temp_val;           // output onto buffer
-          acc_channel++;
-        if (acc_channel==3) {                       // all channels arrived !
-          parse_state++;
-          byte_count=0;
-          channel_number=0;
-          temp_val=0;
-        }else { byte_count=0; temp_val=0; }
-          }
-        break;
+	case 1:
+		shift_buffer_down();
+	
+  		printf("######### NEW PACKET ##############\n");
+		int sample_num = parseBuffer[0];
+		printf("\nSAMPLE NUMBER %i\n",sample_num);
+		parse_state++;
+	
+		break;
 
-      case 5:                                             // look for end byte
-        if (buf[i] == 0xC0){
-          parse_state = 0;
-        }
-        else{
-         // something about synching here
-          parse_state= 0;                             // resync
-        }
-        break;
+	case 2:
+		shift_buffer_down();
+		temp_val |= (((unsigned int)parseBuffer[0]) << (16 - (byte_count*8)));
+		byte_count++;
+		if(byte_count == 3){
 
-      default: parse_state=0;     
+			if((temp_val & 0x00800000) > 0){
+		            temp_val |= 0xFF000000;
+		        }
+		        else temp_val &= 0x00FFFFFF;
+			
+			printf("Channel Number %i : %i\n", channel_number + 1, temp_val);
+
+			channel_number++;
+
+			if(channel_number == 8){
+				parse_state++;
+				byte_count = 0;
+				temp_val = 0;
+				acc_channel = 0;
+			}
+			else{
+				byte_count = 0;
+				temp_val = 0;
+			}
+
+
+		}
+		break;
+
+	case 3:
+		shift_buffer_down();
+		temp_val |= (((unsigned int)parseBuffer[0]) << (8 - (byte_count*8)));
+		byte_count++;
+
+		if (byte_count==2) {
+		  if ((temp_val & 0x00008000) > 0) {
+		    temp_val |= 0xFFFF0000;
+		  } else {
+		    temp_val &= 0x0000FFFF;
+		  }
+
+		  printf("acc channel %d : %i\n", acc_channel, temp_val);
+		  output[acc_channel + 8]=temp_val;           // output onto buffer
+		  acc_channel++;
+		if (acc_channel==3) {                       // all channels arrived !
+		  parse_state++;
+		  byte_count=0;
+		  channel_number=0;
+		  temp_val=0;
+		}else { byte_count=0; temp_val=0; }
+		  }
+		break;
+
+	case 4:
+		shift_buffer_down();
+		if(parseBuffer[0] == 0xC0) is_parsing=FALSE;
     }
-  
+
+
+
+
   }
   return;
 }
