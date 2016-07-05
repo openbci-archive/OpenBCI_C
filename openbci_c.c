@@ -14,17 +14,20 @@ This program provides serial port communication with the OpenBCI Board.
 #include <sys/types.h>
 #include <math.h>
 #include <string.h>
+#include <ctype.h>
+#include <stdlib.h>
 
 #define BAUDRATE B115200            // define baudrate (115200bps)
 #define PORT "/dev/ttyUSB0"         // define port
 #define FALSE 0
 #define TRUE 1
+#define BUFFERSIZE 256
 
 volatile int STOP=FALSE; 
 
 /*Function declarations*/
 void signal_handler_IO (int status);
-void byte_parser (unsigned int* buf, int res);
+void byte_parser();
 void open_port();
 void setup_port();
 void streaming();
@@ -35,10 +38,16 @@ int send_to_board(char* message);
 int fd;                                                        // Serial port file descriptor
 char* port;
 int wait_flag=FALSE;                                           // Signal handler wait flag
-int* buf[1024];                                                // Buffer to holder reads
+//unsigned char buf[1]; turned local, will be overwritten at every read anyway   // Buffer to holder reads
 struct termios serialportsettings;                             // Serial port settings
 struct sigaction saio;                                         // Signal handler            
-    
+
+unsigned char parseBuffer[BUFFERSIZE] = {'\0'}; //pipe will indicate an empty value (can't use NULL becuase the board sends 0's)
+
+int dollaBills = 0;
+
+int bufferHandler(unsigned char buf[]);
+void printString();
 void main(){
   port = "/dev/ttyUSB0";
   open_port();
@@ -94,16 +103,26 @@ void setup_port(){
 
 void streaming(){
   int res;
+  unsigned char buf[1];
+  int bufferVal = 0; //the value returned by bufferHandler
   /* Streaming loop */
   while (STOP==FALSE) {
     // signal
-    if (wait_flag==FALSE) { 
-      res = read(fd,&buf,1);                            // read 33 bytes from serial and place at buf
-      printf("%d",res);
-      byte_parser(*buf,res);                             // send the read to byte_parser()
-      // memset(buf,0,res);
-      wait_flag = TRUE;                                 // wait for new input //
-    }
+    //if (wait_flag==FALSE) { 
+      res = read(fd,buf,1);                            // read 33 bytes from serial and place at buf
+      //printf("%d",res);
+      if(res > 0){
+		bufferVal = bufferHandler(buf);
+        //byte_parser(*buf,res);                             // send the read to byte_parser()
+        // memset(buf,0,res);
+        //wait_flag = TRUE;                                 // wait for new input //
+      }
+	  
+	  if(bufferVal == 1) printString();
+	  else if(bufferVal == 2) ; //char was sent... may be useful in the future
+	  else if(bufferVal == 3) byte_parser(); // a packet was sent. parse it 
+	  bufferVal = 0;
+    //}
   }
 
 
@@ -125,8 +144,63 @@ void signal_handler_IO (int status){
     wait_flag = FALSE;
 }
 
+/** BUFFER HANDLER
+
+	Places data from the serial buffer to the parseBuffer for more parsing (and to prevent data loss)
+
+	returns...
+		- 1 if a string was recently sent
+		- 2 if a char was sent (may be useful for malformed packet debugging). Includes newline characters and spaces
+		- 3 if an end byte was sent (0xC0)
+		- 0 for other data
+**/
+
+
+int bufferHandler(unsigned char buf[]){
+//	if(buf[0] == '\n') printf("\nOriginal : newline ");
+//	else printf("\nOriginal: %c ",buf[0]);
+
+	for(int i = 0; i < BUFFERSIZE - 1; i++){
+	  if(parseBuffer[i] == '\0'){ 
+		parseBuffer[i] = buf[0];
+//		if(parseBuffer[i] == '\n') printf(" parseBufferVal : newline \n");
+//		else printf(" parseBufferVal: %c \n",parseBuffer[i]); 
+		break;}
+	  else if(i == BUFFERSIZE - 1) ; //For future debugging, could be an overflow here.
+
+	}
+	
+	if(buf[0] == '$'){
+	  //there's a string coming in the future... need 3 though to print it.
+	  dollaBills++;
+	}
+	else if(buf[0] != '$' && dollaBills > 0) dollaBills = 0; //Keeps them dolla bills in check :^)
+
+	if(dollaBills == 3){dollaBills = 0; return 1;} //must have printed a string...
+	else if(isalpha(buf[0]) || buf[0] == '\n' || buf[0] == ' ') return 2;
+	else if(buf[0] == 0xC0) return 3;
+	else return 0;
+
+
+}
+
+
+/** Prints strings and removes the chars from parseBuffer **/
+
+void printString(){
+	int index = 0;
+	
+	while(parseBuffer[index] != '\0'){ printf("%c",parseBuffer[index]); index++;}
+	printf("\n");
+	for(int i = 0; i <= index; i++) parseBuffer[i] = '\0';
+
+	if(parseBuffer[0] == '\0') printf("This could be a problem...\n");	
+}
+
+
+
 /* Byte Parser */
-void byte_parser (unsigned int* buf, int res){
+void byte_parser (){
   static unsigned char framenumber = -1;                      // framenumber = sample number from board (0-255)
   static int channel_number = 0;                              // channel number (0-7)
   static int acc_channel = 0;                                 // accelerometer channel (0-2)
@@ -134,6 +208,7 @@ void byte_parser (unsigned int* buf, int res){
   static int temp_val = 0;                                    // holds the value while converting channel values from 24 to 32 bit integers
   static float output[11];                                    // buffer to hold the output of the parse (all -data- bytes of one sample)
   int parse_state = 0;                                        // state of the parse machine (0-5)
+  
   printf("######### NEW PACKET ##############\n");
   for (int i=0; i<res;i++){                                   // iterate over the contents of a packet
     printf("%d |", i);                                        // print byte number (0-33)
@@ -224,6 +299,7 @@ void byte_parser (unsigned int* buf, int res){
 
       default: parse_state=0;     
     }
+  
   }
   return;
 }
