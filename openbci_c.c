@@ -25,18 +25,26 @@ This program provides serial port communication with the OpenBCI Board.
 #define TRUE 1
 #define BUFFERSIZE 2048 
 
+struct packet {
+    float output[12];
+    int isComplete;
+};
+
+
 volatile int STOP=FALSE; 
 
 /*Function declarations*/
 void signal_handler_IO (int status);
-void byte_parser(unsigned char buf[], int res);
+void set_port();
 void open_port();
 void setup_port();
 void streaming();
 void clear_buffer();
 void shift_buffer_down();
+void print_packet(struct packet p);
 int close_port();
 int send_to_board(char* message);
+struct packet byte_parser(unsigned char buf[], int res);
 
 /*Global variables*/
 int fd;                                                        // Serial port file descriptor
@@ -57,10 +65,14 @@ int dollaBills = 0;           //Used to determine if a string was sent (deprecia
 int bufferHandler(unsigned char buf[],int isStreaming);
 void printString();
 void main(){
-  port = "/dev/ttyUSB0";
+  set_port("/dev/ttyUSB0");
   open_port();
   setup_port();
   streaming();
+}
+
+void set_port(char* input){
+  port = input;
 }
 
 void open_port(){
@@ -119,7 +131,7 @@ void streaming(){
   int bufferVal = 0; //the value returned by bufferHandler
   int wasTripped = FALSE;
   char input;
-    
+  struct packet packet; //a packet so nice I named it twice :^)
 
 
   /* Streaming loop */
@@ -155,7 +167,10 @@ void streaming(){
        howLong = 0;
        bufferHandler(buf,isStreaming);
 
-       if(numBytesAdded >= 33) byte_parser(parseBuffer,33);
+       if(numBytesAdded >= 33){ 
+         packet = byte_parser(parseBuffer,33);
+         if(packet.isComplete == TRUE) print_packet(packet);
+       }
      }
 
      else if (howLong < -1000){
@@ -254,16 +269,24 @@ void clear_buffer(){
     numBytesAdded = 0;
 }
 
+void print_packet(struct packet p){
+    printf("\nSAMPLE NUMBER %g\n",p.output[0]);
+    int acc_channel = 0;
+    
+    for(int i = 1; i <= 8; i++) printf("Channel Number %i : %g\n",i,p.output[i]);
 
+    for(int i = 9; i <= 11; i++) printf("Acc Channel %i : %g\n",acc_channel++, p.output[i]);
+
+}
 
 /* Byte Parser */
-void byte_parser (unsigned char buf[], int res){
+struct packet byte_parser (unsigned char buf[], int res){
   static unsigned char framenumber = -1;                      // framenumber = sample number from board (0-255)
   static int channel_number = 0;                              // channel number (0-7)
   static int acc_channel = 0;                                 // accelerometer channel (0-2)
   static int byte_count = 0;                                  // keeps track of channel bytes as we parse
   static int temp_val = 0;                                    // holds the value while converting channel values from 24 to 32 bit integers
-  static float output[11];                                    // buffer to hold the output of the parse (all -data- bytes of one sample)
+  struct packet packet;           // buffer to hold the output of the parse (all -data- bytes of one sample)
   int parse_state = 0;                                        // state of the parse machine (0-5)
   int is_parsing = TRUE; 
 
@@ -281,11 +304,12 @@ void byte_parser (unsigned char buf[], int res){
         shift_buffer_down();
     
         int sample_num = parseBuffer[0];
-        if(sample_num - previous_sample > 20  || sample_num == previous_sample ) return; //TOO MANY DROPPED STOP STREAMING AHHHHHHH
+        if(sample_num - previous_sample > 20  || 
+           sample_num == previous_sample ) { packet.isComplete = FALSE; return packet;}
         
         previous_sample = sample_num;
 
-        printf("\nSAMPLE NUMBER %i\n",sample_num);
+        packet.output[0] = sample_num;
         parse_state++;
     
         break;
@@ -301,9 +325,8 @@ void byte_parser (unsigned char buf[], int res){
                 }
                 else temp_val &= 0x00FFFFFF;
             temp_val = (4.5/gain_setting/(pow(2,23) - 1) * 1000000.f) * temp_val; 
-            printf("Channel Number %i : %i\n", channel_number + 1, temp_val);
-
-            channel_number++;
+            packet.output[++channel_number] = temp_val;
+            
 
             if(channel_number == 8){
                 parse_state++;
@@ -332,9 +355,8 @@ void byte_parser (unsigned char buf[], int res){
             temp_val &= 0x0000FFFF;
           }
 
-          printf("acc channel %d : %i\n", acc_channel, temp_val);
-          output[acc_channel + 8]=temp_val;           // output onto buffer
-          acc_channel++;
+          packet.output[acc_channel++ + 9] = temp_val;
+
         if (acc_channel==3) {                       // all channels arrived !
           parse_state++;
           byte_count=0;
@@ -346,12 +368,13 @@ void byte_parser (unsigned char buf[], int res){
 
     case 4:
         shift_buffer_down();
-        if(parseBuffer[0] == 0xC0) is_parsing=FALSE;
+        if(parseBuffer[0] == 0xC0){packet.isComplete = TRUE;return packet;}
     }
 
 
 
 
   }
-  return;
+  packet.isComplete = FALSE;
+  return packet;
 }
