@@ -21,7 +21,7 @@ This program provides serial port communication with the OpenBCI Board.
 #define PORT "/dev/ttyUSB0"         // define port
 #define FALSE 0
 #define TRUE 1
-#define BUFFERSIZE 256
+#define BUFFERSIZE 512
 
 volatile int STOP=FALSE; 
 
@@ -40,15 +40,15 @@ int send_to_board(char* message);
 int fd;                                                        // Serial port file descriptor
 char* port;
 int wait_flag=FALSE;                                           // Signal handler wait flag
-int numBytesAdded = 0;
-int lastIndex = 0;
+int numBytesAdded = 0;        //Used for determining if a packet was sent
+int lastIndex = 0;            //Used to place bytes into the buffer
 
 struct termios serialportsettings;                             // Serial port settings
 struct sigaction saio;                                         // Signal handler            
 
-unsigned char parseBuffer[BUFFERSIZE] = {'\0'}; //pipe will indicate an empty value (can't use NULL becuase the board sends 0's)
+unsigned char parseBuffer[BUFFERSIZE] = {'\0'}; //Array of Unsigned Chars, initilized with the null-character ('\0')
 
-int dollaBills = 0;
+int dollaBills = 0;           //Used to determine if a string was sent (depreciated?)
 
 int bufferHandler(unsigned char buf[],int isStreaming);
 void printString();
@@ -57,15 +57,16 @@ void main(){
   open_port();
   setup_port();
   streaming();
-  // return;
 }
 
 void open_port(){
   int flags = O_RDWR | O_NOCTTY;          
   fd = open(port, flags);
-  if (-1 == fd){
-    /* Some sort of error handling */
-    printf("ERROR! In opening ttyUSB0\n");  
+  
+  while(fd == -1){
+    printf("ERROR! In opening ttyUSB0! Trying again...\n");  
+    sleep(3);
+    fd = open(port, flags);
   }
 }
 
@@ -111,12 +112,22 @@ void streaming(){
   int isStreaming = FALSE;
   int howLong = 0;
   int bufferVal = 0; //the value returned by bufferHandler
+  int wasTripped = FALSE;
   /* Streaming loop */
+  /* NOTES: STOP==FALSE is always true right now... infinite loop */
   while (STOP==FALSE) {
     // signal
     if (isStreaming==FALSE) { 
       res = read(fd,buf,1);                            // read 33 bytes from serial and place at buf
-      if(res > 0) bufferVal = bufferHandler(buf,isStreaming);
+      if(res > 0) {
+        if(howLong < -1000000 && wasTripped == FALSE){
+          howLong = 0; 
+          wasTripped = TRUE;
+        }
+        bufferVal = bufferHandler(buf,isStreaming);
+      }
+      else if(howLong < -1000000 && wasTripped == TRUE){ bufferVal = 1; howLong = 0; wasTripped = FALSE;}
+      else if(howLong >= -1000000) howLong += res;
       
       if(bufferVal == 1) printString();
       else if(bufferVal == 2) ; //char was sent... may be useful in the future
@@ -125,7 +136,7 @@ void streaming(){
 
 
     }
-   else if(isStreaming ==TRUE){
+   else if(isStreaming==TRUE){
      res = read(fd, buf,1);
      if(res > 0) {
        howLong = 0;
@@ -137,8 +148,9 @@ void streaming(){
      else if (howLong < -100000){
        clear_buffer();  
        isStreaming = FALSE;
+       howLong = 0;
      }
-     else howLong += res;
+     else if (howLong >= -100000) howLong += res;
    }
   }
 
@@ -200,16 +212,13 @@ int bufferHandler(unsigned char buf[],int isStreaming){
 }
 
 
-/** Prints strings and removes the chars from parseBuffer **/
+/* Prints strings and removes the chars from parseBuffer */
 
 void printString(){
-    int index = 0;
-    
-    while(parseBuffer[index] != '\0'){ printf("%c",parseBuffer[index]); index++;}
+
+    for(int i = 0; i <= lastIndex; i++){printf("%c",parseBuffer[i]); parseBuffer[i] = '\0';}
     printf("\n");
-    for(int i = 0; i <= index; i++) parseBuffer[i] = '\0';
     lastIndex = 0;
-    //if(parseBuffer[0] == '\0') printf("This could be a problem...\n");    
 }
 
 
