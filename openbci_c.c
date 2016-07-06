@@ -45,6 +45,7 @@ int wait_flag=FALSE;                                           // Signal handler
 int numBytesAdded = 0;        //Used for determining if a packet was sent
 int lastIndex = 0;            //Used to place bytes into the buffer
 int gain_setting = 24;
+int previous_sample = 0; //stos SIGSEGV error
 
 struct termios serialportsettings;                             // Serial port settings
 struct sigaction saio;                                         // Signal handler            
@@ -157,12 +158,12 @@ void streaming(){
        if(numBytesAdded >= 33) byte_parser(parseBuffer,33);
      }
 
-     else if (howLong < -10000){
+     else if (howLong < -1000){
        clear_buffer();  
        isStreaming = FALSE;
        howLong = 0;
      }
-     else if (howLong >= -10000) howLong += res;
+     else if (howLong >= -1000) howLong += res;
    }
   }
 
@@ -247,6 +248,7 @@ void shift_buffer_down(){
 
 /* Clears the buffer */
 void clear_buffer(){
+
     for(int i = 0; i <= lastIndex; i++) parseBuffer[i] = '\0';
     lastIndex = 0;
     numBytesAdded = 0;
@@ -278,8 +280,11 @@ void byte_parser (unsigned char buf[], int res){
     case 1:
         shift_buffer_down();
     
-        printf("######### NEW PACKET ##############\n");
         int sample_num = parseBuffer[0];
+        if(sample_num - previous_sample > 20  || sample_num == previous_sample ) return; //TOO MANY DROPPED STOP STREAMING AHHHHHHH
+        
+        previous_sample = sample_num;
+
         printf("\nSAMPLE NUMBER %i\n",sample_num);
         parse_state++;
     
