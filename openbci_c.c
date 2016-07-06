@@ -4,6 +4,7 @@ This program provides serial port communication with the OpenBCI Board.
 
 */
 #define _POSIX_SOURCE 1       // POSIX compliant source
+#define _BSD_SOURCE
 
 #include <stdio.h>                  
 #include <termios.h>                
@@ -16,12 +17,13 @@ This program provides serial port communication with the OpenBCI Board.
 #include <string.h>
 #include <ctype.h>
 #include <stdlib.h>
+#include <time.h>
 
 #define BAUDRATE B115200            // define baudrate (115200bps)
 #define PORT "/dev/ttyUSB0"         // define port
 #define FALSE 0
 #define TRUE 1
-#define BUFFERSIZE 512
+#define BUFFERSIZE 2048 
 
 volatile int STOP=FALSE; 
 
@@ -42,6 +44,7 @@ char* port;
 int wait_flag=FALSE;                                           // Signal handler wait flag
 int numBytesAdded = 0;        //Used for determining if a packet was sent
 int lastIndex = 0;            //Used to place bytes into the buffer
+int gain_setting = 24;
 
 struct termios serialportsettings;                             // Serial port settings
 struct sigaction saio;                                         // Signal handler            
@@ -103,7 +106,8 @@ void setup_port(){
   saio.sa_restorer = NULL;                                    // signal handling
   sigaction(SIGIO,&saio,NULL);                                // signal handling
   tcflush(fd, TCIOFLUSH);                                     // flush the serial port
-  send_to_board("v");                                         // reset the board and receive+print board information by sending a "v" command
+  send_to_board("v");          // reset the board and receive+print board information by sending a "v" command
+
 }
 
 void streaming(){
@@ -113,30 +117,38 @@ void streaming(){
   int howLong = 0;
   int bufferVal = 0; //the value returned by bufferHandler
   int wasTripped = FALSE;
+  char input;
+    
+
+
   /* Streaming loop */
   /* NOTES: STOP==FALSE is always true right now... infinite loop */
   while (STOP==FALSE) {
+
+
     // signal
     if (isStreaming==FALSE) { 
+      usleep(5); //Sleep for 5 microseconds (Helps CPU usage)
       res = read(fd,buf,1);                            // read 33 bytes from serial and place at buf
       if(res > 0) {
-        if(howLong < -1000000 && wasTripped == FALSE){
+        if(howLong < -10000000 && wasTripped == FALSE){
           howLong = 0; 
           wasTripped = TRUE;
         }
         bufferVal = bufferHandler(buf,isStreaming);
       }
-      else if(howLong < -1000000 && wasTripped == TRUE){ bufferVal = 1; howLong = 0; wasTripped = FALSE;}
-      else if(howLong >= -1000000) howLong += res;
+      else if(howLong < -10000000 && wasTripped == TRUE){ bufferVal = 1; howLong = 0; wasTripped = FALSE;}
+      else if(howLong >= -10000000) howLong += res;
       
       if(bufferVal == 1) printString();
       else if(bufferVal == 2) ; //char was sent... may be useful in the future
-      else if(bufferVal == 3) isStreaming = TRUE; // a packet was sent. parse it 
+      else if(bufferVal == 3) {isStreaming = TRUE; howLong = 0;} // a packet was sent. parse it 
       bufferVal = 0;
 
 
     }
    else if(isStreaming==TRUE){
+     usleep(1); //Sleep for 1 microsecond (helps CPU usage)
      res = read(fd, buf,1);
      if(res > 0) {
        howLong = 0;
@@ -145,12 +157,12 @@ void streaming(){
        if(numBytesAdded >= 33) byte_parser(parseBuffer,33);
      }
 
-     else if (howLong < -100000){
+     else if (howLong < -10000){
        clear_buffer();  
        isStreaming = FALSE;
        howLong = 0;
      }
-     else if (howLong >= -100000) howLong += res;
+     else if (howLong >= -10000) howLong += res;
    }
   }
 
@@ -168,6 +180,7 @@ int close_port(){
 int send_to_board(char* message){
     return write(fd,message,1);                                // possibly make the size dynamic?
 }
+
 
 /*Signalling*/
 void signal_handler_IO (int status){
@@ -282,7 +295,7 @@ void byte_parser (unsigned char buf[], int res){
                     temp_val |= 0xFF000000;
                 }
                 else temp_val &= 0x00FFFFFF;
-            
+            temp_val = (4.5/gain_setting/(pow(2,23) - 1) * 1000000.f) * temp_val; 
             printf("Channel Number %i : %i\n", channel_number + 1, temp_val);
 
             channel_number++;
