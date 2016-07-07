@@ -3,69 +3,27 @@
 This program provides serial port communication with the OpenBCI Board.
 
 */
-#define _POSIX_SOURCE 1       // POSIX compliant source
-#define _BSD_SOURCE
 
-#include <stdio.h>                  
-#include <termios.h>                
-#include <fcntl.h>
-#include <unistd.h>
-#include <errno.h>                  
-#include <sys/signal.h>
-#include <sys/types.h>
-#include <math.h>
-#include <string.h>
-#include <ctype.h>
-#include <stdlib.h>
-#include <time.h>
+#include "openbci_c.h"
 
-#define BAUDRATE B115200            // define baudrate (115200bps)
-#define PORT "/dev/ttyUSB0"         // define port
-#define FALSE 0
-#define TRUE 1
-#define BUFFERSIZE 2048 
-
-struct packet {
-    float output[12];
-    int isComplete;
-};
-
-
-volatile int STOP=FALSE; 
-
-/*Function declarations*/
-void signal_handler_IO (int status);
-void set_port();
-void open_port();
-void setup_port();
-void streaming();
-void clear_buffer();
-void shift_buffer_down();
-void print_packet(struct packet p);
-int close_port();
-int send_to_board(char* message);
-struct packet byte_parser(unsigned char buf[], int res);
+volatile int STOP=FALSE;
 
 /*Global variables*/
 int fd;                                                        // Serial port file descriptor
-char* port;
+char* port = "/dev/ttyUSB0";
 int wait_flag=FALSE;                                           // Signal handler wait flag
 int numBytesAdded = 0;        //Used for determining if a packet was sent
 int lastIndex = 0;            //Used to place bytes into the buffer
 int gain_setting = 24;
 int previous_sample = 0; //stos SIGSEGV error
-
-struct termios serialportsettings;                             // Serial port settings
-struct sigaction saio;                                         // Signal handler            
+struct sigaction saio;
+struct termios serialportsettings;
 
 unsigned char parseBuffer[BUFFERSIZE] = {'\0'}; //Array of Unsigned Chars, initilized with the null-character ('\0')
 
 int dollaBills = 0;           //Used to determine if a string was sent (depreciated?)
-
-int bufferHandler(unsigned char buf[],int isStreaming);
-void printString();
 void main(){
-  set_port("/dev/ttyUSB0");
+  set_port(port);
   open_port();
   setup_port();
   streaming();
@@ -269,6 +227,7 @@ void clear_buffer(){
     numBytesAdded = 0;
 }
 
+/* Prints the packet passed to it */
 void print_packet(struct packet p){
     printf("\nSAMPLE NUMBER %g\n",p.output[0]);
     int acc_channel = 0;
