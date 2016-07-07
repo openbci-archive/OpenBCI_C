@@ -8,7 +8,6 @@ In order to communicate with the board, you currently must `echo` directly to th
 Any other character can be sent, however only certain characters will do things to the board. Check out http://docs.openbci.com/software/01-OpenBCI_SDK for more info.
 
 ##To-Do
-- Make importable 
 - Fix Address Boundary Error
 - Create EEG_Processing Module(s)
 
