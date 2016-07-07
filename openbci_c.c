@@ -18,21 +18,18 @@ int gain_setting = 24;
 int previous_sample = 0; //stos SIGSEGV error
 struct sigaction saio;
 struct termios serialportsettings;
+int isStreaming = FALSE;
 
 unsigned char parseBuffer[BUFFERSIZE] = {'\0'}; //Array of Unsigned Chars, initilized with the null-character ('\0')
 
 int dollaBills = 0;           //Used to determine if a string was sent (depreciated?)
-void main(){
-  set_port(port);
-  open_port();
-  setup_port();
-  streaming();
-}
 
+// Sets the port to a passed string
 void set_port(char* input){
   port = input;
 }
 
+// Opens the port stated in set_port
 void open_port(){
   int flags = O_RDWR | O_NOCTTY;          
   fd = open(port, flags);
@@ -54,7 +51,6 @@ void setup_port(){
   serialportsettings.c_cflag &= ~CSTOPB;                      // # of stop bits = 1 (2 is default)
   serialportsettings.c_cflag &= ~CSIZE;                       // clears the mask
   serialportsettings.c_cflag |= CS8;                          // set the # of data bits = 8
-  // serialportsettings.c_cflag &= ~CRTSCTS;                     // no hardware based flow control (RTS/CTS)
   serialportsettings.c_cflag |= CREAD;                        // turn on the receiver of the serial port (CREAD)
   serialportsettings.c_cflag |= CLOCAL;                       // no modem
   serialportsettings.c_cflag |= HUPCL;                        // ?? drop DTR (i.e. hangup) on close
@@ -81,10 +77,41 @@ void setup_port(){
 
 }
 
-void streaming(){
+// Prints strings only
+void not_streaming(){
   int res;
   unsigned char buf[1];
-  int isStreaming = FALSE;
+  int howLong = 0;
+  int wasTripped = FALSE;  
+  int bufferVal = 0;
+
+  while(STOP==FALSE){
+    usleep(5);
+    res = read(fd,buf,1);
+    
+    if(res > 0){
+      if(howLong < -10000000 && wasTripped == FALSE){
+          howLong = 0; 
+          wasTripped = TRUE;
+      }
+        bufferVal = bufferHandler(buf,isStreaming);
+    }
+    else if(howLong < -10000000 && wasTripped == TRUE){ bufferVal = 1; howLong = 0; wasTripped = FALSE;}
+    else if(howLong >= -10000000) howLong += res;
+      
+    if(bufferVal == 1) printString();
+    else if(bufferVal == 2) ; //char was sent... may be useful in the future
+    else if(bufferVal == 3) {isStreaming = TRUE; break;} // a packet was sent. parse it 
+    bufferVal = 0;
+  }
+  
+
+}
+
+// The main streaming function
+struct packet streaming(){
+  int res;
+  unsigned char buf[1];
   int howLong = 0;
   int bufferVal = 0; //the value returned by bufferHandler
   int wasTripped = FALSE;
@@ -96,29 +123,6 @@ void streaming(){
   /* NOTES: STOP==FALSE is always true right now... infinite loop */
   while (STOP==FALSE) {
 
-
-    // signal
-    if (isStreaming==FALSE) { 
-      usleep(5); //Sleep for 5 microseconds (Helps CPU usage)
-      res = read(fd,buf,1);                            // read 33 bytes from serial and place at buf
-      if(res > 0) {
-        if(howLong < -10000000 && wasTripped == FALSE){
-          howLong = 0; 
-          wasTripped = TRUE;
-        }
-        bufferVal = bufferHandler(buf,isStreaming);
-      }
-      else if(howLong < -10000000 && wasTripped == TRUE){ bufferVal = 1; howLong = 0; wasTripped = FALSE;}
-      else if(howLong >= -10000000) howLong += res;
-      
-      if(bufferVal == 1) printString();
-      else if(bufferVal == 2) ; //char was sent... may be useful in the future
-      else if(bufferVal == 3) {isStreaming = TRUE; howLong = 0;} // a packet was sent. parse it 
-      bufferVal = 0;
-
-
-    }
-   else if(isStreaming==TRUE){
      usleep(1); //Sleep for 1 microsecond (helps CPU usage)
      res = read(fd, buf,1);
      if(res > 0) {
@@ -127,7 +131,7 @@ void streaming(){
 
        if(numBytesAdded >= 33){ 
          packet = byte_parser(parseBuffer,33);
-         if(packet.isComplete == TRUE) print_packet(packet);
+         if(packet.isComplete == TRUE) return packet;
        }
      }
 
@@ -135,13 +139,12 @@ void streaming(){
        clear_buffer();  
        isStreaming = FALSE;
        howLong = 0;
+       break;
      }
      else if (howLong >= -1000) howLong += res;
    }
-  }
 
 
-    close_port();
 }
 
 

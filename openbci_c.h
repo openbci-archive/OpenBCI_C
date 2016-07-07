@@ -43,7 +43,7 @@ extern void open_port();
 
 extern void setup_port();
 
-extern void streaming();
+extern void not_streaming();
 
 extern void clear_buffer();
 
@@ -60,5 +60,7 @@ extern int close_port();
 extern int send_to_board(char* message);
 
 extern struct packet byte_parser(unsigned char buf[], int res);
+
+extern struct packet streaming();
 
 #endif
