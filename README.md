@@ -10,6 +10,7 @@ Any other character can be sent, however only certain characters will do things 
 ##To-Do
 - Make importable 
 - Fix Address Boundary Error
+- Create EEG_Processing Module(s)
 
 ##Known Bugs
 - SIGSEGV (Address Boundary Error) occasionally when streaming is halted
