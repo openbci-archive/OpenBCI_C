@@ -25,6 +25,10 @@
 #define BAUDRATE B115200 //Baudrate for OpenBCI (115200bps)
 
 
+#define ADS1299_VREF 4.5
+#define ACCEL_SCALE_FAC (0.002 * pow(2,4))
+
+
 /* Structs */
 //Struct of a packet, to be filled with packet data.
 struct packet{
