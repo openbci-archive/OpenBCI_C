@@ -85,7 +85,7 @@ void not_streaming(){
   int wasTripped = FALSE;  
   int bufferVal = 0;
 
-  while(STOP==FALSE){
+  while(1){
     usleep(5);
     res = read(fd,buf,1);
     
@@ -239,6 +239,16 @@ void print_packet(struct packet p){
 
     for(int i = 9; i <= 11; i++) printf("Acc Channel %i : %f\n",acc_channel++, p.output[i]);
 
+}
+
+void start_stream(){
+  if (isStreaming == TRUE){
+    perror("Error: Already streaming");
+  }else{
+    printf("Starting stream...");
+    send_to_board("b");
+    isStreaming = TRUE;
+  }
 }
 
 /* Byte Parser */

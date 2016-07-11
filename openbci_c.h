@@ -19,7 +19,7 @@
 #include <time.h>
 
 
-#define BUFFERSIZE 2048
+#define BUFFERSIZE 4056
 #define TRUE 1
 #define FALSE 0
 #define BAUDRATE B115200 //Baudrate for OpenBCI (115200bps)
@@ -57,6 +57,10 @@ extern void print_packet(struct packet P);
 
 extern void printString();
 
+extern void start_stream();
+
+extern void stop_stream();
+
 extern int bufferHandler(unsigned char buf[], int isStreaming);
 
 extern int close_port();
@@ -66,5 +70,6 @@ extern int send_to_board(char* message);
 extern struct packet byte_parser(unsigned char buf[], int res);
 
 extern struct packet streaming();
+
 
 #endif
