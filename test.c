@@ -1,12 +1,16 @@
 #include "openbci_c.h"
 #include "openbci_c.c"
 
+
 void main(){
   struct packet local_packet;
-
+  int return_val = 0;
   port = "/dev/ttyUSB0";
-  set_port(port);
-  open_port();
+
+  find_port();
+  //set_port(port);
+
+
   setup_port();
 
   while(1){
@@ -23,5 +27,4 @@ void main(){
   }
 
 }
-
 

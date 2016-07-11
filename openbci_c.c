@@ -30,16 +30,52 @@ void set_port(char* input){
 }
 
 // Opens the port stated in set_port
-void open_port(){
+int open_port(){
   int flags = O_RDWR | O_NOCTTY;          
   fd = open(port, flags);
-  
-  while(fd == -1){
-    printf("ERROR! In opening ttyUSB0! Trying again...\n");  
-    sleep(3);
-    fd = open(port, flags);
-  }
+  return fd;
 }
+
+
+void find_port(){
+  //get values from the system itself (particularly utsname.sysname)
+  struct utsname unameData;
+  uname(&unameData);
+  int return_val = 0;
+  char stringLiteral[12];
+
+  if(strcmp(unameData.sysname, "Linux") == 0 || strcmp(unameData.sysname, "cygwin")) {
+    //Linux
+    int try_counter = 0;
+    int repeat = TRUE;
+
+    while(repeat==TRUE){
+      for(int i = 0; i < 34; i++){
+         TRY{
+           sprintf(stringLiteral, "/dev/ttyUSB%i",i);
+           set_port(stringLiteral);
+           return_val = open_port();
+           if(return_val == -1) THROW;
+           else return;
+         }
+         CATCH{
+           printf("\nError opening on port /dev/ttyUSB%i",i);  
+         }
+         ETRY;
+      }
+      sleep(3);    
+     
+   }
+
+  }
+
+  else if(strcmp(unameData.sysname, "ERROR") == 0) printf("Windows\n");
+  else if(strcmp(unameData.sysname, "darwin") == 0) printf("Darwin\n");
+
+}
+
+
+
 
 void setup_port(){
   tcgetattr(fd,&serialportsettings);
@@ -316,15 +352,16 @@ struct packet byte_parser (unsigned char buf[], int res){
           } else {
             temp_val &= 0x0000FFFF;
           }
+       
+        packet.output[acc_channel++ + 9] = temp_val;
 
-          packet.output[acc_channel++ + 9] = temp_val;
-
+        
         if (acc_channel==3) {                       // all channels arrived !
           parse_state++;
           byte_count=0;
           channel_number=0;
           temp_val=0;
-        }else { byte_count=0; temp_val=0; }
+        }else { byte_count=0; temp_val=0;}
           }
         break;
 

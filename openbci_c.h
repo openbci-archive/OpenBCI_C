@@ -17,12 +17,20 @@
 #include <ctype.h>
 #include <stdio.h>
 #include <time.h>
-
+#include <setjmp.h>
+#include <sys/utsname.h>
 
 #define BUFFERSIZE 2048
 #define TRUE 1
 #define FALSE 0
 #define BAUDRATE B115200 //Baudrate for OpenBCI (115200bps)
+
+
+#define TRY do{ jmp_buf ex_buf__; if( !setjmp(ex_buf__)){
+#define CATCH } else {
+#define ETRY } } while(0)
+#define THROW longjmp(ex_buf__, 1)
+
 
 
 /* Structs */
@@ -39,8 +47,6 @@ extern void signal_handler_IO(int status);
 
 extern void set_port(char* input);
 
-extern void open_port();
-
 extern void setup_port();
 
 extern void not_streaming();
@@ -53,11 +59,15 @@ extern void print_packet(struct packet P);
 
 extern void printString();
 
+extern void find_port();
+
 extern int bufferHandler(unsigned char buf[], int isStreaming);
 
 extern int close_port();
 
 extern int send_to_board(char* message);
+
+extern int open_port();
 
 extern struct packet byte_parser(unsigned char buf[], int res);
 
