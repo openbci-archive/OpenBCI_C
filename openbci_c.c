@@ -318,7 +318,6 @@ struct packet byte_parser (unsigned char buf[], int res){
             temp_val &= 0x0000FFFF;
           }
           temp_val = temp_val * ACCEL_SCALE_FAC;        //convert from counts to G
-          printf("cool\n");
           packet.output[acc_channel++ + 9] = temp_val;
 
         if (acc_channel==3) {                       // all channels arrived !
