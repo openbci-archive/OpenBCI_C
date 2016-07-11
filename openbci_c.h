@@ -26,7 +26,7 @@
 
 
 #define ADS1299_VREF 4.5
-#define ACCEL_SCALE_FAC (0.002 * pow(2,4))
+#define ACCEL_SCALE_FAC (0.002 / pow(2,4))
 
 
 /* Structs */
