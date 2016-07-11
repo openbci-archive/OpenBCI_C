@@ -31,6 +31,8 @@
 #define ETRY } } while(0)
 #define THROW longjmp(ex_buf__, 1)
 
+#define ADS1299_VREF 4.5
+#define ACCEL_SCALE_FAC (0.002 / pow(2,4))
 
 
 /* Structs */

@@ -273,7 +273,7 @@ void print_packet(struct packet p){
     
     for(int i = 1; i <= 8; i++) printf("Channel Number %i : %g\n",i,p.output[i]);
 
-    for(int i = 9; i <= 11; i++) printf("Acc Channel %i : %g\n",acc_channel++, p.output[i]);
+    for(int i = 9; i <= 11; i++) printf("Acc Channel %i : %f\n",acc_channel++, p.output[i]);
 
 }
 
@@ -284,6 +284,7 @@ struct packet byte_parser (unsigned char buf[], int res){
   static int acc_channel = 0;                                 // accelerometer channel (0-2)
   static int byte_count = 0;                                  // keeps track of channel bytes as we parse
   static int temp_val = 0;                                    // holds the value while converting channel values from 24 to 32 bit integers
+  static float temp_float = 0.0;
   struct packet packet;           // buffer to hold the output of the parse (all -data- bytes of one sample)
   int parse_state = 0;                                        // state of the parse machine (0-5)
   int is_parsing = TRUE; 
@@ -322,7 +323,8 @@ struct packet byte_parser (unsigned char buf[], int res){
                     temp_val |= 0xFF000000;
                 }
                 else temp_val &= 0x00FFFFFF;
-            temp_val = (4.5/gain_setting/(pow(2,23) - 1) * 1000000.f) * temp_val; 
+            //convert from counts to uVolts
+            temp_val = (ADS1299_VREF/gain_setting/(pow(2,23) - 1) * 1000000.f) * temp_val; 
             packet.output[++channel_number] = temp_val;
             
 
@@ -352,16 +354,16 @@ struct packet byte_parser (unsigned char buf[], int res){
           } else {
             temp_val &= 0x0000FFFF;
           }
-       
-        packet.output[acc_channel++ + 9] = temp_val;
+          temp_float = temp_val * ACCEL_SCALE_FAC;        //convert from counts to G
 
-        
+          packet.output[acc_channel++ + 9] = temp_float;
+
         if (acc_channel==3) {                       // all channels arrived !
           parse_state++;
           byte_count=0;
           channel_number=0;
           temp_val=0;
-        }else { byte_count=0; temp_val=0;}
+        }else { byte_count=0; temp_val=0; temp_float=0; }
           }
         break;
 
