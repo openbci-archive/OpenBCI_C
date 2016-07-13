@@ -24,6 +24,7 @@ unsigned char parseBuffer[BUFFERSIZE] = {'\0'}; //Array of Unsigned Chars, initi
 
 int dollaBills = 0;           //Used to determine if a string was sent (depreciated?)
 
+
 // Sets the port to a passed string
 void set_port(char* input){
   port = input;
@@ -46,7 +47,6 @@ void find_port(){
 
   if(strcmp(unameData.sysname, "Linux") == 0 || strcmp(unameData.sysname, "cygwin")) {
     //Linux
-    int try_counter = 0;
     int repeat = TRUE;
 
     while(repeat==TRUE){
@@ -149,9 +149,6 @@ struct packet streaming(){
   int res;
   unsigned char buf[1];
   int howLong = 0;
-  int bufferVal = 0; //the value returned by bufferHandler
-  int wasTripped = FALSE;
-  char input;
   struct packet packet; //a packet so nice I named it twice :^)
 
 
@@ -180,7 +177,7 @@ struct packet streaming(){
      else if (howLong >= -1000) howLong += res;
    }
 
-
+  return packet;
 }
 
 
@@ -209,6 +206,7 @@ void signal_handler_IO (int status){
         - 2 if a char was sent (may be useful for malformed packet debugging). Includes newline characters and spaces
         - 3 if a start byte was sent (0xA0)
         - 0 for other data
+        - -1 for errors
 **/
 
 
@@ -234,7 +232,7 @@ int bufferHandler(unsigned char buf[],int isStreaming){
         lastIndex++;
         numBytesAdded++;
     }
-
+    return -1;
 }
 
 
@@ -279,7 +277,6 @@ void print_packet(struct packet p){
 
 /* Byte Parser */
 struct packet byte_parser (unsigned char buf[], int res){
-  static unsigned char framenumber = -1;                      // framenumber = sample number from board (0-255)
   static int channel_number = 0;                              // channel number (0-7)
   static int acc_channel = 0;                                 // accelerometer channel (0-2)
   static int byte_count = 0;                                  // keeps track of channel bytes as we parse
