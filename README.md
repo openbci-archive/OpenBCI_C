@@ -11,11 +11,7 @@ Any other character can be sent, however only certain characters will do things 
 - Fix Address Boundary Error
 - Error handling
 - Implement tests
-- Implementations with:
-        Python
-        Labstreaminglayer
-        Matlab
-        Java/Processing
+- Implementations with: Python, Labstreaminglayer, Matlab, Java/Processing
 
 ##Known Bugs
 - SIGSEGV (Address Boundary Error) occasionally when streaming is halted
