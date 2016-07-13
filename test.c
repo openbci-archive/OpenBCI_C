@@ -12,14 +12,12 @@ void main(){
   while(1){
     switch(isStreaming){
       case FALSE:
-          not_streaming();
-          // printf("%s", isStreaming);
-          usleep(1000);
-          // start_stream();
+          parse_strings();
+          sleep(5);
+          start_stream();
           break;
 
       case TRUE:
-          printf("sdgodnghladnglasnglkasn");
           local_packet = streaming();
           print_packet(local_packet);
           break;

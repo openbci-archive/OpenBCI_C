@@ -47,7 +47,7 @@ extern void open_port();
 
 extern void setup_port();
 
-extern void not_streaming();
+extern void parse_strings();
 
 extern void clear_buffer();
 
@@ -55,13 +55,13 @@ extern void shift_buffer_down();
 
 extern void print_packet(struct packet P);
 
-extern void printString();
+extern int print_string();
 
-extern void start_stream();
+extern int start_stream();
 
-extern void stop_stream();
+extern int stop_stream();
 
-extern int bufferHandler(unsigned char buf[], int isStreaming);
+extern int buffer_handler(unsigned char buf[], int isStreaming);
 
 extern int close_port();
 
