@@ -16,7 +16,9 @@ void main(){
   while(1){
     switch(isStreaming){
       case FALSE:
-          not_streaming();
+          parse_strings();
+          sleep(5);
+          start_stream();
           break;
 
       case TRUE:
