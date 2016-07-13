@@ -9,7 +9,13 @@ Any other character can be sent, however only certain characters will do things 
 
 ##To-Do
 - Fix Address Boundary Error
-- Create EEG_Processing Module(s)
+- Error handling
+- Implement tests
+- Implementations with:
+        Python
+        Labstreaminglayer
+        Matlab
+        Java/Processing
 
 ##Known Bugs
 - SIGSEGV (Address Boundary Error) occasionally when streaming is halted

@@ -6,31 +6,44 @@ This program provides serial port communication with the OpenBCI Board.
 
 #include "openbci_c.h"
 
-volatile int STOP=FALSE;
-
 /*Global variables*/
-int fd;                                                        // Serial port file descriptor
+int fd;                                                // Serial port file descriptor
 char* port = "/dev/ttyUSB0";
-int wait_flag=FALSE;                                           // Signal handler wait flag
-int numBytesAdded = 0;        //Used for determining if a packet was sent
-int lastIndex = 0;            //Used to place bytes into the buffer
+int wait_flag=FALSE;                                   // Signal handler wait flag
+int numBytesAdded = 0;                                 //Used for determining if a packet was sent
+int lastIndex = 0;                                     //Used to place bytes into the buffer
 int gain_setting = 24;
-int previous_sample = 0; //stos SIGSEGV error
+int previous_sample = 0;                               //stos SIGSEGV error
 struct sigaction saio;
 struct termios serialportsettings;
 int isStreaming = FALSE;
 
-unsigned char parseBuffer[BUFFERSIZE] = {'\0'}; //Array of Unsigned Chars, initilized with the null-character ('\0')
+unsigned char parseBuffer[BUFFERSIZE] = {'\0'};        //Array of Unsigned Chars, initilized with the null-character ('\0')
 
-int dollaBills = 0;           //Used to determine if a string was sent (depreciated?)
+int dollaBills = 0;                                    //Used to determine if a string was sent (depreciated?)
 
 
-// Sets the port to a passed string
-void set_port(char* input){
+
+/**
+*     Function: set_port
+*     --------------------
+*     Sets the name of the serial port that the dongle is connected to.
+*     E.g. 'COM1', '/dev/ttyUSB0'
+*
+*/
+void set_port(char* input){ 
   port = input;
 }
 
-// Opens the port stated in set_port
+/**
+*     Function: open_port
+*     --------------------
+*     Opens the port specified by set_port()
+*     If the open initially fails, the function continues to try to open the port until success
+*
+*     TODO: How to handle serial connection errors. Does the continuously retrying ever work? 
+*           Should an error or -1 be returned after a while?
+*/
 int open_port(){
   int flags = O_RDWR | O_NOCTTY;          
   fd = open(port, flags);
@@ -74,9 +87,14 @@ void find_port(){
 
 }
 
-
-
-
+/**
+*     Function: setup_port
+*     ---------------------
+*     Establishes the serial port attributes, based on specifications of the OpenBCI Board 
+*     communications and data format.
+*     After establishing attributes, sends a 'v' to the board for a soft reset.
+*
+*/
 void setup_port(){
   tcgetattr(fd,&serialportsettings);
   /* Serial port settings */
@@ -89,10 +107,10 @@ void setup_port(){
   serialportsettings.c_cflag |= CS8;                          // set the # of data bits = 8
   serialportsettings.c_cflag |= CREAD;                        // turn on the receiver of the serial port (CREAD)
   serialportsettings.c_cflag |= CLOCAL;                       // no modem
-  serialportsettings.c_cflag |= HUPCL;                        // ?? drop DTR (i.e. hangup) on close
+  serialportsettings.c_cflag |= HUPCL;                        // drop DTR (i.e. hangup) on close
   //Input Data Flags
-  serialportsettings.c_iflag = IGNPAR;                        // *NEW* ignore parity errors
-  serialportsettings.c_iflag &= ~(IXOFF | IXON | IXANY);       //ignore 'XOFF' and 'XON' command bits [fixes a bug where the parser skips '0x11' and '0x13']
+  serialportsettings.c_iflag = IGNPAR;                        // ignore parity errors
+  serialportsettings.c_iflag &= ~(IXOFF | IXON | IXANY);      // ignore 'XOFF' and 'XON' command bits
   //Output Flags
   serialportsettings.c_oflag = 0;
   //Local Flags
@@ -109,19 +127,23 @@ void setup_port(){
   saio.sa_restorer = NULL;                                    // signal handling
   sigaction(SIGIO,&saio,NULL);                                // signal handling
   tcflush(fd, TCIOFLUSH);                                     // flush the serial port
-  send_to_board("v");          // reset the board and receive+print board information by sending a "v" command
-
+  send_to_board("v");                                         // reset the board
 }
 
-// Prints strings only
-void not_streaming(){
+/**
+*     Function: parse_strings
+*     -----------------------
+*     Parses string data from the board (board identification, registry information, etc)
+*
+*/
+void parse_strings(){
   int res;
   unsigned char buf[1];
   int howLong = 0;
   int wasTripped = FALSE;  
   int bufferVal = 0;
 
-  while(STOP==FALSE){
+  while(1){
     usleep(5);
     res = read(fd,buf,1);
     
@@ -130,12 +152,12 @@ void not_streaming(){
           howLong = 0; 
           wasTripped = TRUE;
       }
-        bufferVal = bufferHandler(buf,isStreaming);
+        bufferVal = buffer_handler(buf,isStreaming);
     }
     else if(howLong < -10000000 && wasTripped == TRUE){ bufferVal = 1; howLong = 0; wasTripped = FALSE;}
     else if(howLong >= -10000000) howLong += res;
       
-    if(bufferVal == 1) printString();
+    if(bufferVal == 1) { print_string(); return;}
     else if(bufferVal == 2) ; //char was sent... may be useful in the future
     else if(bufferVal == 3) {isStreaming = TRUE; break;} // a packet was sent. parse it 
     bufferVal = 0;
@@ -144,7 +166,13 @@ void not_streaming(){
 
 }
 
-// The main streaming function
+/** 
+*     Function: streaming
+*     ----------------------
+*     Controls the streaming loop
+*
+*
+*/
 struct packet streaming(){
   int res;
   unsigned char buf[1];
@@ -154,13 +182,13 @@ struct packet streaming(){
 
   /* Streaming loop */
   /* NOTES: STOP==FALSE is always true right now... infinite loop */
-  while (STOP==FALSE) {
+  while (1) {
 
      usleep(1); //Sleep for 1 microsecond (helps CPU usage)
      res = read(fd, buf,1);
      if(res > 0) {
        howLong = 0;
-       bufferHandler(buf,isStreaming);
+       buffer_handler(buf,isStreaming);
 
        if(numBytesAdded >= 33){ 
          packet = byte_parser(parseBuffer,33);
@@ -181,37 +209,52 @@ struct packet streaming(){
 }
 
 
-/* CLOSE SERIAL PORT */
+/**
+*     Function: close_port
+*     -----------------------
+*     Closes the serial port
+*
+*/
 int close_port(){
     return close(fd);
 }
-/* Send messages to the board */
-/* Return: bytes written */
+
+/**
+*     Function: send_to_board
+*     -------------------------
+*     Sends bytes to board
+*
+*/
 int send_to_board(char* message){
-    return write(fd,message,1);                                // possibly make the size dynamic?
+    return write(fd,message,1);
 }
 
 
-/*Signalling*/
+/**
+*     Function: signal_handler_IO
+*     ---------------------------
+*     Serial port signal_handler_IO. May be depreciated
+*
+*/
 void signal_handler_IO (int status){
     wait_flag = FALSE;
 }
 
-/** BUFFER HANDLER
-
-    Places data from the serial buffer to the parseBuffer for more parsing (and to prevent data loss)
-
-    returns...
-        - 1 if a string was recently sent
-        - 2 if a char was sent (may be useful for malformed packet debugging). Includes newline characters and spaces
-        - 3 if a start byte was sent (0xA0)
-        - 0 for other data
-        - -1 for errors
+/** 
+*    Function: buffer_handler
+*    ------------------------
+*    Places data from the serial buffer to the parseBuffer for more parsing 
+*    (and to prevent data loss)
+*   
+*    Returns:
+*       1 if a string was recently sent
+*       2 if a char was sent (may be useful for malformed packet debugging). 
+*         Includes newline characters and spaces
+*       3 if a start byte was sent (0xA0)
+*       0 for other data
+*      -1 for errors
 **/
-
-
-int bufferHandler(unsigned char buf[],int isStreaming){
-
+int buffer_handler(unsigned char buf[],int isStreaming){
     if(isStreaming == FALSE){
         parseBuffer[lastIndex] = buf[0];
         lastIndex++;
@@ -236,13 +279,25 @@ int bufferHandler(unsigned char buf[],int isStreaming){
 }
 
 
-/* Prints strings and removes the chars from parseBuffer */
-
-void printString(){
-
+/**
+*    Function: print_string
+*    -----------------------
+*    Print string messages received from the board.
+* 
+*    Returns:
+*        0 if printing  
+*       -1 if "Error: No strings to print while streaming"
+*/
+int print_string(){
+  if (isStreaming){
+    perror("Error: No strings to print while streaming");
+    return -1;
+  }else{
     for(int i = 0; i <= lastIndex; i++){printf("%c",parseBuffer[i]); parseBuffer[i] = '\0';}
     printf("\n");
     lastIndex = 0;
+    return 0;
+  }
 }
 
 
@@ -275,7 +330,51 @@ void print_packet(struct packet p){
 
 }
 
-/* Byte Parser */
+/*
+*    Function: start_stream
+*    -------------
+*    Starts streaming data from the OpenBCI Board.
+*
+*    Return: 0 if called send_to_board
+*           -1 if "Error: Already streaming"
+*/
+int start_stream(){
+  if (isStreaming == TRUE){
+    perror("Error: Already streaming");
+    return -1;
+  }else{
+    printf("Starting stream...");
+    send_to_board("b");
+    isStreaming = TRUE;
+    return 0;
+  }
+}
+
+/*
+*    Function: stop_stream
+*    -------------
+*    Stop streaming data from the OpenBCI Board.
+*
+*    Return: 0 if called to send_to_board
+*           -1 if "Error: Not current streaming"
+*/
+int stop_stream(){
+  if (isStreaming == FALSE){
+    perror("Error: Not currently streaming");
+    return -1;
+  }else{
+    send_to_board("s");
+    isStreaming = FALSE;
+    return 0;
+  }
+}
+
+/**
+*    Function: byte_parser
+*    ---------------------
+*    Parses the incoming bytes during streaming
+*
+*/
 struct packet byte_parser (unsigned char buf[], int res){
   static int channel_number = 0;                              // channel number (0-7)
   static int acc_channel = 0;                                 // accelerometer channel (0-2)

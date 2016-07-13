@@ -20,7 +20,7 @@
 #include <setjmp.h>
 #include <sys/utsname.h>
 
-#define BUFFERSIZE 2048
+#define BUFFERSIZE 4056
 #define TRUE 1
 #define FALSE 0
 #define BAUDRATE B115200 //Baudrate for OpenBCI (115200bps)
@@ -51,7 +51,7 @@ extern void set_port(char* input);
 
 extern void setup_port();
 
-extern void not_streaming();
+extern void parse_strings();
 
 extern void clear_buffer();
 
@@ -59,11 +59,15 @@ extern void shift_buffer_down();
 
 extern void print_packet(struct packet P);
 
-extern void printString();
+extern int print_string();
 
 extern void find_port();
 
-extern int bufferHandler(unsigned char buf[], int isStreaming);
+extern int start_stream();
+
+extern int stop_stream();
+
+extern int buffer_handler(unsigned char buf[], int isStreaming);
 
 extern int close_port();
 
@@ -74,5 +78,6 @@ extern int open_port();
 extern struct packet byte_parser(unsigned char buf[], int res);
 
 extern struct packet streaming();
+
 
 #endif
