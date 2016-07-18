@@ -148,15 +148,16 @@ void parse_strings(){
     res = read(fd,buf,1);
     
     if(res > 0){
-      if(howLong < -10000000 && wasTripped == FALSE){
+      if(howLong < -1000 && wasTripped == FALSE){
           howLong = 0; 
           wasTripped = TRUE;
       }
         bufferVal = buffer_handler(buf,isStreaming);
     }
-    else if(howLong < -10000000 && wasTripped == TRUE){ bufferVal = 1; howLong = 0; wasTripped = FALSE;}
-    else if(howLong >= -10000000) howLong += res;
-      
+    else if(howLong < -1000 && wasTripped == TRUE){ bufferVal = 1; howLong = 0; wasTripped = FALSE;}
+    else if(howLong >= -1000) howLong += res;
+    else if(howLong < -1000 && wasTripped == FALSE) return;
+ 
     if(bufferVal == 1) { print_string(); return;}
     else if(bufferVal == 2) ; //char was sent... may be useful in the future
     else if(bufferVal == 3) {isStreaming = TRUE; break;} // a packet was sent. parse it 
