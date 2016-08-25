@@ -256,6 +256,10 @@ void signal_handler_IO (int status){
 *      -1 for errors
 **/
 int buffer_handler(unsigned char buf[],int isStreaming){
+    if(lastIndex >= sizeof(parseBuffer)){
+        printf("\nBuffer overflow !\n");
+        return -1;
+    }
     if(isStreaming == FALSE){
         parseBuffer[lastIndex] = buf[0];
         lastIndex++;
@@ -294,7 +298,7 @@ int print_string(){
     perror("Error: No strings to print while streaming");
     return -1;
   }else{
-    for(int i = 0; i <= lastIndex; i++){printf("%c",parseBuffer[i]); parseBuffer[i] = '\0';}
+    for(int i = 0; i < lastIndex; i++){printf("%c",parseBuffer[i]); parseBuffer[i] = '\0';}
     printf("\n");
     lastIndex = 0;
     return 0;
@@ -305,17 +309,17 @@ int print_string(){
 /* Shifts the buffer down by 1 index, clears the last index*/
 void shift_buffer_down(){
 
-    for(int i = 0; i < lastIndex; i++) parseBuffer[i] = parseBuffer[i + 1];
-    parseBuffer[lastIndex] = '\0';  
     lastIndex--;
     numBytesAdded--;
-    
+
+    for(int i = 0; i < lastIndex; i++) parseBuffer[i] = parseBuffer[i + 1];
+    parseBuffer[lastIndex] = '\0';
 }
 
 /* Clears the buffer */
 void clear_buffer(){
 
-    for(int i = 0; i <= lastIndex; i++) parseBuffer[i] = '\0';
+    for(int i = 0; i < lastIndex; i++) parseBuffer[i] = '\0';
     lastIndex = 0;
     numBytesAdded = 0;
 }
@@ -393,7 +397,7 @@ struct packet byte_parser (unsigned char buf[], int res){
 
 
   
-  while(is_parsing == TRUE){
+  while(is_parsing == TRUE && lastIndex > 1){
     switch(parse_state){
 
     case 1:
