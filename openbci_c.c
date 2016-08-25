@@ -332,6 +332,16 @@ void print_packet(struct packet p){
 }
 
 /*
+*    Function: stream_started
+*    -------------
+*    Return: TRUE if already started
+*            FALSE if not streaming
+*/
+int stream_started(){
+  return isStreaming;
+}
+
+/*
 *    Function: start_stream
 *    -------------
 *    Starts streaming data from the OpenBCI Board.

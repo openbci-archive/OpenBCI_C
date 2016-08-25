@@ -11,13 +11,19 @@ int main(){
 
   setup_port();
 
-  parse_strings();
-  sleep(5);
-  start_stream();
-
   while(1){
-    local_packet = streaming();
-    print_packet(local_packet);
+    if (stream_started()){
+
+      local_packet = streaming();
+      print_packet(local_packet);
+
+    }else{ // stream_started() == FALSE
+
+      parse_strings();
+      sleep(5);
+      start_stream();     
+
+    }
   }
 
   return return_val;
