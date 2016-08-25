@@ -4,10 +4,9 @@
 int main(){
   struct packet local_packet;
   int return_val = 0;
-  char * port = "/dev/ttyUSB0";
 
+  set_port("/dev/ttyUSB0");
   find_port();
-  set_port(port);
 
 
   setup_port();
