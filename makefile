@@ -1,8 +1,8 @@
 main:
-	gcc -o openbci_c.o openbci_c.h openbci_c.c -std=gnu99
+	gcc -c -o openbci_c.o openbci_c.c -std=gnu99
 
 test:
-	gcc -o test.o  test.c openbci_c.h -std=gnu99
+	gcc -o test test.c -std=gnu99
 
 clean:
 	rm -r *.o *.so 
