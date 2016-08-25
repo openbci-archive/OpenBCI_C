@@ -45,8 +45,6 @@ struct packet{
 
 /* Function Definitions */
 
-extern void signal_handler_IO(int status);
-
 extern void set_port(char* input);
 
 extern void setup_port();

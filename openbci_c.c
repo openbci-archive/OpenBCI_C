@@ -9,7 +9,6 @@ This program provides serial port communication with the OpenBCI Board.
 /*Global variables*/
 int fd;                                                // Serial port file descriptor
 char* port = "/dev/ttyUSB0";
-int wait_flag=FALSE;                                   // Signal handler wait flag
 int numBytesAdded = 0;                                 //Used for determining if a packet was sent
 int lastIndex = 0;                                     //Used to place bytes into the buffer
 int gain_setting = 24;
@@ -120,12 +119,8 @@ void setup_port(){
   serialportsettings.c_cc[VMIN]=1;                            // minimum of 1 byte per read
   serialportsettings.c_cc[VTIME]=0;                           // minimum of 0 seconds between reads
 
-  fcntl(fd, F_SETFL, O_NDELAY|O_ASYNC|O_NONBLOCK );                      // asynchronous settings
+  fcntl(fd, F_SETFL, O_NDELAY|O_NONBLOCK );                   // asynchronous settings
   tcsetattr(fd,TCSANOW,&serialportsettings);                  // set the above attributes
-  saio.sa_handler = signal_handler_IO;                        // signal handling
-  saio.sa_flags = 0;                                          // signal handling
-  saio.sa_restorer = NULL;                                    // signal handling
-  sigaction(SIGIO,&saio,NULL);                                // signal handling
   tcflush(fd, TCIOFLUSH);                                     // flush the serial port
   send_to_board("v");                                         // reset the board
 }
@@ -230,16 +225,6 @@ int send_to_board(char* message){
     return write(fd,message,1);
 }
 
-
-/**
-*     Function: signal_handler_IO
-*     ---------------------------
-*     Serial port signal_handler_IO. May be depreciated
-*
-*/
-void signal_handler_IO (int status){
-    wait_flag = FALSE;
-}
 
 /** 
 *    Function: buffer_handler
