@@ -4,7 +4,7 @@
 
 /* Structs */
 //Struct of a packet, to be filled with packet data.
-struct packet{
+struct openbci_packet{
     float output[12];
     int isComplete;
 };
@@ -22,7 +22,7 @@ extern void clear_buffer();
 
 extern void shift_buffer_down();
 
-extern void print_packet(struct packet P);
+extern void print_packet(struct openbci_packet P);
 
 extern int print_string();
 
@@ -42,9 +42,9 @@ extern int send_to_board(char* message);
 
 extern int open_port();
 
-extern struct packet byte_parser(unsigned char buf[], int res);
+extern struct openbci_packet byte_parser(unsigned char buf[], int res);
 
-extern struct packet streaming();
+extern struct openbci_packet streaming();
 
 
 #endif

@@ -193,11 +193,11 @@ void parse_strings(){
 *
 *
 */
-struct packet streaming(){
+struct openbci_packet streaming(){
   int res;
   unsigned char buf[1];
   int howLong = 0;
-  struct packet packet; //a packet so nice I named it twice :^)
+  struct openbci_packet packet; //a packet so nice I named it twice :^)
 
 
   /* Streaming loop */
@@ -334,7 +334,7 @@ void clear_buffer(){
 }
 
 /* Prints the packet passed to it */
-void print_packet(struct packet p){
+void print_packet(struct openbci_packet p){
     printf("\nSAMPLE NUMBER %g\n",p.output[0]);
     int acc_channel = 0;
     
@@ -399,13 +399,13 @@ int stop_stream(){
 *    Parses the incoming bytes during streaming
 *
 */
-struct packet byte_parser (unsigned char buf[], int res){
+struct openbci_packet byte_parser (unsigned char buf[], int res){
   static int channel_number = 0;                              // channel number (0-7)
   static int acc_channel = 0;                                 // accelerometer channel (0-2)
   static int byte_count = 0;                                  // keeps track of channel bytes as we parse
   static int temp_val = 0;                                    // holds the value while converting channel values from 24 to 32 bit integers
   static float temp_float = 0.0;
-  struct packet packet;           // buffer to hold the output of the parse (all -data- bytes of one sample)
+  struct openbci_packet packet;           // buffer to hold the output of the parse (all -data- bytes of one sample)
   int parse_state = 0;                                        // state of the parse machine (0-5)
   int is_parsing = TRUE; 
 
