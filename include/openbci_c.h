@@ -26,11 +26,6 @@
 #define BAUDRATE B115200 //Baudrate for OpenBCI (115200bps)
 
 
-#define TRY do{ jmp_buf ex_buf__; if( !setjmp(ex_buf__)){
-#define CATCH } else {
-#define ETRY } } while(0)
-#define THROW longjmp(ex_buf__, 1)
-
 #define ADS1299_VREF 4.5
 #define ACCEL_SCALE_FAC (0.002 / pow(2,4))
 

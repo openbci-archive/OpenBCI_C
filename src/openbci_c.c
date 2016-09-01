@@ -63,17 +63,13 @@ void find_port(){
 
     while(repeat==TRUE){
       for(int i = 0; i < 34; i++){
-         TRY{
-           sprintf(stringLiteral, "/dev/ttyUSB%i",i );
-           set_port(stringLiteral);
-           return_val = open_port();
-           if(return_val == -1) THROW;
-           else return;
-         }
-         CATCH{
-           printf("\nError opening on port /dev/ttyUSB%i %s\n",i , strerror(errno));  
-         }
-         ETRY;
+        sprintf(stringLiteral, "/dev/ttyUSB%i",i);
+        set_port(stringLiteral);
+        return_val = open_port();
+        if(return_val == -1)
+          printf("\nError opening on port /dev/ttyUSB%i %s\n",i,strerror(errno));  
+        else
+          return;
       }
       sleep(3);    
      
