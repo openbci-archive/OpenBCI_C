@@ -1,5 +1,7 @@
 #include "openbci_c.h"
 
+#include <unistd.h>
+
 
 int main(){
   struct packet local_packet;

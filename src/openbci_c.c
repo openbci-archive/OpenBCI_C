@@ -6,6 +6,34 @@ This program provides serial port communication with the OpenBCI Board.
 
 #include "openbci_c.h"
 
+#define _POSIX_SOURCE 1 //POSIX compliant source
+#define _BSD_SOURCE
+
+#include <stdlib.h>
+#include <termios.h>                
+#include <fcntl.h>
+#include <unistd.h>
+#include <errno.h>                  
+#include <sys/signal.h>
+#include <sys/types.h>
+#include <math.h>
+#include <string.h>
+#include <ctype.h>
+#include <stdio.h>
+#include <time.h>
+#include <setjmp.h>
+#include <sys/utsname.h>
+
+#define BUFFERSIZE 4056
+#define TRUE 1
+#define FALSE 0
+#define BAUDRATE B115200 //Baudrate for OpenBCI (115200bps)
+
+
+#define ADS1299_VREF 4.5
+#define ACCEL_SCALE_FAC (0.002 / pow(2,4))
+
+
 /*Global variables*/
 int fd;                                                // Serial port file descriptor
 char* port = "/dev/ttyUSB0";
