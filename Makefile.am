@@ -1,0 +1,11 @@
+ACLOCAL_AMFLAGS = -I m4
+AM_CFLAGS = -std=c99
+AM_CPPFLAGS = -I $(top_srcdir)/include
+
+lib_LTLIBRARIES = libopenbci.la
+libopenbci_la_SOURCES = src/openbci_c.c
+include_HEADERS = include/openbci_c.h
+
+noinst_PROGRAMS = test
+test_LDADD = -lopenbci
+test_SOURCES = util/test.c
