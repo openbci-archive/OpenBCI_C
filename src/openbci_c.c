@@ -155,7 +155,7 @@ void obci_destroy(openbci_t* obci){
 *
 */
 void obci_reset(openbci_t* obci){
-  send_to_board(obci, 'v');
+  obci_send_to_board(obci, 'v');
 }
 
 /**
@@ -169,8 +169,8 @@ int obci_fd(openbci_t* obci){
 }
 
 /**
-*     Function: find_port
-*     -------------------
+*     Function: obci_find_port
+*     ------------------------
 *     Probes the system for available ports and returns the first one it finds.  The string is stored statically.
 *
 *     TODO: Detect OpenBCI
@@ -178,7 +178,7 @@ int obci_fd(openbci_t* obci){
 *     TODO: make a better function that provides a list of ports rather than
 *           just one.
 */
-char const* find_port(){
+char const* obci_find_port(){
   //get values from the system itself (particularly utsname.sysname)
   struct utsname unameData;
   uname(&unameData);
@@ -213,12 +213,12 @@ char const* find_port(){
 }
 
 /**
-*     Function: parse_strings
-*     -----------------------
+*     Function: obci_parse_strings
+*     ----------------------------
 *     Parses string data from the board (board identification, registry information, etc)
 *
 */
-void parse_strings(openbci_t* obci){
+void obci_parse_strings(openbci_t* obci){
   int res;
   unsigned char buf[1];
   int howLong = 0;
@@ -234,13 +234,13 @@ void parse_strings(openbci_t* obci){
           howLong = 0; 
           wasTripped = TRUE;
       }
-        bufferVal = buffer_handler(obci,buf,obci->isStreaming);
+        bufferVal = obci_buffer_handler(obci,buf,obci->isStreaming);
     }
     else if(howLong < -1000 && wasTripped == TRUE){ bufferVal = 1; howLong = 0; wasTripped = FALSE;}
     else if(howLong >= -1000) howLong += res;
     else if(howLong < -1000 && wasTripped == FALSE) return;
  
-    if(bufferVal == 1) { print_string(obci); return;}
+    if(bufferVal == 1) { obci_print_string(obci); return;}
     else if(bufferVal == 2) ; //char was sent... may be useful in the future
     else if(bufferVal == 3) {obci->isStreaming = TRUE; break;} // a packet was sent. parse it 
     bufferVal = 0;
@@ -250,13 +250,13 @@ void parse_strings(openbci_t* obci){
 }
 
 /** 
-*     Function: streaming
-*     ----------------------
+*     Function: obci_streaming
+*     ------------------------
 *     Controls the streaming loop
 *
 *
 */
-openbci_packet_t streaming(openbci_t* obci){
+openbci_packet_t obci_streaming(openbci_t* obci){
   int res;
   unsigned char buf[1];
   int howLong = 0;
@@ -271,16 +271,16 @@ openbci_packet_t streaming(openbci_t* obci){
      res = read(obci->fd, buf,1);
      if(res > 0) {
        howLong = 0;
-       buffer_handler(obci,buf,obci->isStreaming);
+       obci_buffer_handler(obci,buf,obci->isStreaming);
 
        if(obci->numBytesAdded >= 33){ 
-         packet = byte_parser(obci,obci->parseBuffer,33);
+         packet = obci_byte_parser(obci,obci->parseBuffer,33);
          if(packet.isComplete == TRUE) return packet;
        }
      }
 
      else if (howLong < -1000){
-       clear_buffer(obci);  
+       obci_clear_buffer(obci);  
        obci->isStreaming = FALSE;
        howLong = 0;
        break;
@@ -292,19 +292,19 @@ openbci_packet_t streaming(openbci_t* obci){
 }
 
 /**
-*     Function: send_to_board
-*     -------------------------
+*     Function: obci_send_to_board
+*     ----------------------------
 *     Sends bytes to board
 *
 */
-int send_to_board(openbci_t* obci, char message){
+int obci_send_to_board(openbci_t* obci, char message){
     return write(obci->fd,&message,1);
 }
 
 
 /** 
-*    Function: buffer_handler
-*    ------------------------
+*    Function: obci_buffer_handler
+*    -----------------------------
 *    Places data from the serial buffer to the parseBuffer for more parsing 
 *    (and to prevent data loss)
 *   
@@ -316,7 +316,7 @@ int send_to_board(openbci_t* obci, char message){
 *       0 for other data
 *      -1 for errors
 **/
-int buffer_handler(openbci_t* obci, unsigned char buf[],int isStreaming){
+int obci_buffer_handler(openbci_t* obci, unsigned char buf[],int isStreaming){
     if(obci->lastIndex >= sizeof(obci->parseBuffer)){
         printf("\nBuffer overflow !\n");
         return -1;
@@ -346,15 +346,15 @@ int buffer_handler(openbci_t* obci, unsigned char buf[],int isStreaming){
 
 
 /**
-*    Function: print_string
-*    -----------------------
+*    Function: obci_print_string
+*    ---------------------------
 *    Print string messages received from the board.
 * 
 *    Returns:
 *        0 if printing  
 *       -1 if "Error: No strings to print while streaming"
 */
-int print_string(openbci_t* obci){
+int obci_print_string(openbci_t* obci){
   if (obci->isStreaming){
     perror("Error: No strings to print while streaming");
     return -1;
@@ -368,7 +368,7 @@ int print_string(openbci_t* obci){
 
 
 /* Shifts the buffer down by 1 index, clears the last index*/
-void shift_buffer_down(openbci_t* obci){
+void obci_shift_buffer_down(openbci_t* obci){
 
     obci->lastIndex--;
     obci->numBytesAdded--;
@@ -378,7 +378,7 @@ void shift_buffer_down(openbci_t* obci){
 }
 
 /* Clears the buffer */
-void clear_buffer(openbci_t* obci){
+void obci_clear_buffer(openbci_t* obci){
 
     for(int i = 0; i < obci->lastIndex; i++) obci->parseBuffer[i] = '\0';
     obci->lastIndex = 0;
@@ -386,7 +386,7 @@ void clear_buffer(openbci_t* obci){
 }
 
 /* Prints the packet passed to it */
-void print_packet(openbci_packet_t p){
+void obci_print_packet(openbci_packet_t p){
     printf("\nSAMPLE NUMBER %g\n",p.output[0]);
     int acc_channel = 0;
     
@@ -397,61 +397,61 @@ void print_packet(openbci_packet_t p){
 }
 
 /*
-*    Function: stream_started
-*    -------------
+*    Function: obci_stream_started
+*    -----------------------------
 *    Return: TRUE if already started
 *            FALSE if not streaming
 */
-int stream_started(openbci_t* obci){
+int obci_stream_started(openbci_t* obci){
   return obci->isStreaming;
 }
 
 /*
-*    Function: start_stream
-*    -------------
+*    Function: obci_start_stream
+*    ---------------------------
 *    Starts streaming data from the OpenBCI Board.
 *
 *    Return: 0 if called send_to_board
 *           -1 if "Error: Already streaming"
 */
-int start_stream(openbci_t* obci){
+int obci_start_stream(openbci_t* obci){
   if (obci->isStreaming == TRUE){
     perror("Error: Already streaming");
     return -1;
   }else{
     printf("Starting stream...");
-    send_to_board(obci, 'b');
+    obci_send_to_board(obci, 'b');
     obci->isStreaming = TRUE;
     return 0;
   }
 }
 
 /*
-*    Function: stop_stream
-*    -------------
+*    Function: obci_stop_stream
+*    --------------------------
 *    Stop streaming data from the OpenBCI Board.
 *
 *    Return: 0 if called to send_to_board
 *           -1 if "Error: Not current streaming"
 */
-int stop_stream(openbci_t * obci){
+int obci_stop_stream(openbci_t * obci){
   if (obci->isStreaming == FALSE){
     perror("Error: Not currently streaming");
     return -1;
   }else{
-    send_to_board(obci, 's');
+    obci_send_to_board(obci, 's');
     obci->isStreaming = FALSE;
     return 0;
   }
 }
 
 /**
-*    Function: byte_parser
-*    ---------------------
+*    Function: obci_byte_parser
+*    --------------------------
 *    Parses the incoming bytes during streaming
 *
 */
-openbci_packet_t byte_parser (openbci_t* obci, unsigned char buf[], int res){
+openbci_packet_t obci_byte_parser (openbci_t* obci, unsigned char buf[], int res){
   static int channel_number = 0;                              // channel number (0-7)
   static int acc_channel = 0;                                 // accelerometer channel (0-2)
   static int byte_count = 0;                                  // keeps track of channel bytes as we parse
@@ -463,7 +463,7 @@ openbci_packet_t byte_parser (openbci_t* obci, unsigned char buf[], int res){
 
 
  
-  if(buf[0] != 0xA0){ shift_buffer_down(obci); is_parsing=FALSE; }
+  if(buf[0] != 0xA0){ obci_shift_buffer_down(obci); is_parsing=FALSE; }
   else if(buf[0] == 0xA0) parse_state = 1;
 
 
@@ -472,7 +472,7 @@ openbci_packet_t byte_parser (openbci_t* obci, unsigned char buf[], int res){
     switch(parse_state){
 
     case 1:
-        shift_buffer_down(obci);
+        obci_shift_buffer_down(obci);
     
         int sample_num = obci->parseBuffer[0];
         if(sample_num - obci->previous_sample > 20  || 
@@ -486,7 +486,7 @@ openbci_packet_t byte_parser (openbci_t* obci, unsigned char buf[], int res){
         break;
 
     case 2:
-        shift_buffer_down(obci);
+        obci_shift_buffer_down(obci);
         temp_val |= (((unsigned int)obci->parseBuffer[0]) << (16 - (byte_count*8)));
         byte_count++;
         if(byte_count == 3){
@@ -516,7 +516,7 @@ openbci_packet_t byte_parser (openbci_t* obci, unsigned char buf[], int res){
         break;
 
     case 3:
-        shift_buffer_down(obci);
+        obci_shift_buffer_down(obci);
         temp_val |= (((unsigned int)obci->parseBuffer[0]) << (8 - (byte_count*8)));
         byte_count++;
 
@@ -540,7 +540,7 @@ openbci_packet_t byte_parser (openbci_t* obci, unsigned char buf[], int res){
         break;
 
     case 4:
-        shift_buffer_down(obci);
+        obci_shift_buffer_down(obci);
         if(obci->parseBuffer[0] == 0xC0){packet.isComplete = TRUE;return packet;}
     }
 

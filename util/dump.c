@@ -4,7 +4,7 @@
 
 int main(){
   openbci_t* obci;
-  obci_create(&obci, find_port());
+  obci_create(&obci, obci_find_port());
   int fd = obci_fd(obci);
 
   while(1) {

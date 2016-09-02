@@ -27,33 +27,33 @@ extern void obci_destroy(openbci_t* obci);
 
 extern void obci_reset(openbci_t* obci);
 
-extern void parse_strings(openbci_t* obci);
+extern void obci_parse_strings(openbci_t* obci);
 
-extern void clear_buffer(openbci_t* obci);
+extern void obci_clear_buffer(openbci_t* obci);
 
-extern void shift_buffer_down(openbci_t* obci);
+extern void obci_shift_buffer_down(openbci_t* obci);
 
-extern void print_packet(openbci_packet_t P);
+extern void obci_print_packet(openbci_packet_t P);
 
-extern int print_string(openbci_t* obci);
+extern int obci_print_string(openbci_t* obci);
 
-extern char const* find_port();
+extern char const* obci_find_port();
 
 extern int obci_fd(openbci_t* obci);
 
-extern int stream_started(openbci_t* obci);
+extern int obci_stream_started(openbci_t* obci);
 
-extern int start_stream(openbci_t* obci);
+extern int obci_start_stream(openbci_t* obci);
 
-extern int stop_stream(openbci_t* obci);
+extern int obci_stop_stream(openbci_t* obci);
 
-extern int buffer_handler(openbci_t* obci, unsigned char buf[], int isStreaming);
+extern int obci_buffer_handler(openbci_t* obci, unsigned char buf[], int isStreaming);
 
-extern int send_to_board(openbci_t* obci, char message);
+extern int obci_send_to_board(openbci_t* obci, char message);
 
-extern openbci_packet_t byte_parser(openbci_t* obci, unsigned char buf[], int res);
+extern openbci_packet_t obci_byte_parser(openbci_t* obci, unsigned char buf[], int res);
 
-extern openbci_packet_t streaming(openbci_t* obci);
+extern openbci_packet_t obci_streaming(openbci_t* obci);
 
 
 #endif
