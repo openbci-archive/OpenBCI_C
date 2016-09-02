@@ -49,17 +49,46 @@ struct openbci_t {
   int dollaBills;                                        //Used to determine if a string was sent (depreciated?)
 };
 
+/**
+*     Function: open_port
+*     --------------------
+*     Internal.  Opens the port specified.
+*     E.g. 'COM1', '/dev/ttyUSB0', '/dev/ttyACM0'
+*     Returns the file descriptor.  On failure, returns -1.
+*     
+*/
+static int open_port(char const* port){
+  int flags = O_RDWR | O_NOCTTY;          
+  return open(port, flags);
+}
+
 
 /**
 *     Function: obci_create
 *     ---------------------
-*     Allocates memory for an OpenBCI device/dongle context, and
-*     initializes internal values.
-*
+*     Allocates memory for an OpenBCI device/dongle context, initializes
+*     internal values, and establishes the serial port attributes, based
+*     on specifications of the OpenBCI Board communications and data format.
+*     Provide the name of the serial port that the dongle is connected to.
+*     E.g. 'COM1', '/dev/ttyUSB0', '/dev/ttyACM0'
+*     Opens the port specified.  Returns OBCI_SYSERROR if the open fails.
 */
-void obci_create(openbci_t** obci){
+int obci_create(openbci_t** obci, char const* port){
+
+  size_t portlen = strlen(port) + 1;
+  struct termios serialportsettings;
+  int fd;
+
+  // Try to open the port first
+  fd = open_port(port);
+  if (fd == -1)
+    return OBCI_SYSERROR;
+
+  // Initialize data structure
   *obci = malloc(sizeof(openbci_t));
-  (*obci)->port = 0;
+  (*obci)->fd = fd;
+  (*obci)->port = malloc(portlen);
+  memcpy((*obci)->port, port, portlen);
   (*obci)->numBytesAdded = 0;
   (*obci)->lastIndex = 0;
   (*obci)->gain_setting = 24;
@@ -67,105 +96,9 @@ void obci_create(openbci_t** obci){
   (*obci)->isStreaming = FALSE;
   memset((*obci)->parseBuffer, '\0', sizeof((*obci)->parseBuffer));
   (*obci)->dollaBills = 0;
-  set_port(*obci, "/dev/ttyUSB0");
-}
-
-/**
-*     Function: obci_destroy
-*     ----------------------
-*     Frees resources associated with an OpenBCI device context.
-*     The context is invalid after this call.
-*
-*/
-void obci_destroy(openbci_t* obci){
-  free(obci->port);
-  free(obci);
-}
-
-/**
-*     Function: set_port
-*     --------------------
-*     Sets the name of the serial port that the dongle is connected to.
-*     E.g. 'COM1', '/dev/ttyUSB0', '/dev/ttyACM0'
-*
-*/
-void set_port(openbci_t* obci, char* input){ 
-  size_t len = strlen(input) + 1;
-
-  free(obci->port);
-  obci->port = malloc(len);
-  memcpy(obci->port, input, len);
-}
-
-/**
-*     Function: open_port
-*     -------------------
-*     Opens the port specified by set_port()
-*     If the open initially fails, the function continues to try to open the port until success
-*
-*     TODO: How to handle serial connection errors. Does the continuously retrying ever work? 
-*           Should an error or -1 be returned after a while?
-*/
-int open_port(openbci_t* obci){
-  int flags = O_RDWR | O_NOCTTY;          
-  obci->fd = open(obci->port, flags);
-  return obci->fd;
-}
-
-
-/**
-*     Function: find_port
-*     -------------------
-*     Probes the system for available ports and opens the first one it finds.
-*
-*     TODO: Detect OpenBCI
-*     TODO: implement platforms other than Linux
-*/
-void find_port(openbci_t* obci){
-  //get values from the system itself (particularly utsname.sysname)
-  struct utsname unameData;
-  uname(&unameData);
-  int return_val = 0;
-  char stringLiteral[12];
-
-  if(strcmp(unameData.sysname, "Linux") == 0 || strcmp(unameData.sysname, "cygwin")) {
-    //Linux
-    int repeat = TRUE;
-
-    while(repeat==TRUE){
-      for(int i = 0; i < 34; i++){
-        sprintf(stringLiteral, "/dev/ttyUSB%i",i);
-        set_port(obci, stringLiteral);
-        return_val = open_port(obci);
-        if(return_val == -1)
-          printf("\nError opening on port /dev/ttyUSB%i %s\n",i,strerror(errno));  
-        else
-          return;
-      }
-      sleep(3);    
-     
-   }
-
-  }
-
-  else if(strcmp(unameData.sysname, "ERROR") == 0) printf("Windows\n");
-  else if(strcmp(unameData.sysname, "darwin") == 0) printf("Darwin\n");
-
-}
-
-/**
-*     Function: setup_port
-*     ---------------------
-*     Establishes the serial port attributes, based on specifications of the OpenBCI Board 
-*     communications and data format.
-*     After establishing attributes, sends a 'v' to the board for a soft reset.
-*
-*/
-void setup_port(openbci_t* obci){
 
   /* Serial port settings */
-  struct termios serialportsettings;
-  tcgetattr(obci->fd,&serialportsettings);
+  tcgetattr((*obci)->fd,&serialportsettings);
 
   cfsetispeed(&serialportsettings,B115200);                   // set the input baud rate
   cfsetospeed(&serialportsettings,B115200);                   // set the output baud rate 
@@ -194,10 +127,89 @@ void setup_port(openbci_t* obci){
   serialportsettings.c_cc[VMIN]=1;                            // minimum of 1 byte per read
   serialportsettings.c_cc[VTIME]=0;                           // minimum of 0 seconds between reads
 
-  fcntl(obci->fd, F_SETFL, O_NDELAY|O_NONBLOCK );             // asynchronous settings
-  tcsetattr(obci->fd,TCSANOW,&serialportsettings);            // set the above attributes
-  tcflush(obci->fd, TCIOFLUSH);                               // flush the serial port
-  send_to_board(obci, 'v');                                   // reset the board
+  fcntl((*obci)->fd, F_SETFL, O_NDELAY|O_NONBLOCK );             // asynchronous settings
+  tcsetattr((*obci)->fd,TCSANOW,&serialportsettings);            // set the above attributes
+  tcflush((*obci)->fd, TCIOFLUSH);                               // flush the serial port
+
+  return OBCI_SUCCESS;
+}
+
+/**
+*     Function: obci_destroy
+*     ----------------------
+*     Frees resources associated with an OpenBCI device context and
+*     closes the serial port.
+*     The context is invalid after this call.
+*
+*/
+void obci_destroy(openbci_t* obci){
+  close(obci->fd);
+  free(obci->port);
+  free(obci);
+}
+
+/**
+*     Function: obci_reset
+*     --------------------
+*     Sends a 'v' to the board for a soft reset.
+*
+*/
+void obci_reset(openbci_t* obci){
+  send_to_board(obci, 'v');
+}
+
+/**
+*     Function: obci_fd
+*     -----------------
+*     Returns the open file descriptor for the port associated with a
+*     device context.  For debugging.
+*/
+int obci_fd(openbci_t* obci){
+  return obci->fd;
+}
+
+/**
+*     Function: find_port
+*     -------------------
+*     Probes the system for available ports and returns the first one it finds.  The string is stored statically.
+*
+*     TODO: Detect OpenBCI
+*     TODO: implement platforms other than Linux
+*     TODO: make a better function that provides a list of ports rather than
+*           just one.
+*/
+char const* find_port(){
+  //get values from the system itself (particularly utsname.sysname)
+  struct utsname unameData;
+  uname(&unameData);
+  int return_val = 0;
+  static char stringLiteral[12];
+
+  if(strcmp(unameData.sysname, "Linux") == 0 || strcmp(unameData.sysname, "cygwin")) {
+    //Linux
+    int repeat = TRUE;
+
+    while(repeat==TRUE){
+      for(int i = 0; i < 34; i++){
+        sprintf(stringLiteral, "/dev/ttyUSB%i",i);
+        return_val = open_port(stringLiteral);
+        if(return_val == -1){
+          printf("\nError opening on port /dev/ttyUSB%i",i);  
+        }else{
+          close(return_val);
+          return stringLiteral;
+        }
+      }
+      sleep(3);    
+     
+   }
+
+  }
+
+  else if(strcmp(unameData.sysname, "ERROR") == 0) printf("Windows\n");
+  else if(strcmp(unameData.sysname, "darwin") == 0) printf("Darwin\n");
+
+  return 0;
 }
 
 /**
@@ -277,17 +289,6 @@ openbci_packet_t streaming(openbci_t* obci){
    }
 
   return packet;
-}
-
-
-/**
-*     Function: close_port
-*     -----------------------
-*     Closes the serial port
-*
-*/
-int close_port(openbci_t* obci){
-    return close(obci->fd);
 }
 
 /**

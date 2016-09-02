@@ -8,12 +8,11 @@ int main(){
   openbci_t * obci;
   int return_val = 0;
 
-  obci_create(&obci);
-  set_port(obci, "/dev/ttyUSB0");
-  find_port(obci);
-
-
-  setup_port(obci);
+  char const* port = find_port();
+  if (!port)
+    port = "/dev/ttyUSB0";
+  obci_create(&obci, port);
+  obci_reset(obci);
 
   while(1){
     if (stream_started(obci)){
