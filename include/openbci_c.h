@@ -54,7 +54,7 @@ extern int obci_send_to_board(openbci_t* obci, char message);
 
 
 /*
-*    Return: -1 if data is streaming
+*    Return: 1 if data is streaming
 *            0 if not streaming
 */
 extern int obci_stream_started(openbci_t* obci);
