@@ -58,8 +58,8 @@ struct openbci_t {
 *
 */
 void obci_create(openbci_t** obci){
-  (*obci) = malloc(sizeof(openbci_t));
-  (*obci)->port = "/dev/ttyUSB0";
+  *obci = malloc(sizeof(openbci_t));
+  (*obci)->port = 0;
   (*obci)->numBytesAdded = 0;
   (*obci)->lastIndex = 0;
   (*obci)->gain_setting = 24;
@@ -67,6 +67,7 @@ void obci_create(openbci_t** obci){
   (*obci)->isStreaming = FALSE;
   memset((*obci)->parseBuffer, '\0', sizeof((*obci)->parseBuffer));
   (*obci)->dollaBills = 0;
+  set_port(*obci, "/dev/ttyUSB0");
 }
 
 /**
@@ -77,6 +78,7 @@ void obci_create(openbci_t** obci){
 *
 */
 void obci_destroy(openbci_t* obci){
+  free(obci->port);
   free(obci);
 }
 
@@ -88,7 +90,11 @@ void obci_destroy(openbci_t* obci){
 *
 */
 void set_port(openbci_t* obci, char* input){ 
-  obci->port = input;
+  size_t len = strlen(input) + 1;
+
+  free(obci->port);
+  obci->port = malloc(len);
+  memcpy(obci->port, input, len);
 }
 
 /**

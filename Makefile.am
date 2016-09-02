@@ -1,5 +1,5 @@
 ACLOCAL_AMFLAGS = -I m4
-AM_CFLAGS = -std=c99
+AM_CFLAGS = -std=c99 -Wall -Werror
 AM_CPPFLAGS = -I $(top_srcdir)/include
 
 lib_LTLIBRARIES = libopenbci.la
