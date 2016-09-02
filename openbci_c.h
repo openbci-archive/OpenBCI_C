@@ -63,6 +63,8 @@ extern int print_string();
 
 extern void find_port();
 
+extern int stream_started();
+
 extern int start_stream();
 
 extern int stop_stream();

@@ -1,12 +1,18 @@
-main:
-	gcc -c -o openbci_c.o openbci_c.c -std=gnu99
+CFLAGS=-Wall -fPIC -std=gnu99
 
-test:
-	gcc -o test test.c -std=gnu99
+
+all: libopenbci.a test python
+
+python: libopenbci.so
+
+test: test.o libopenbci.a
+
+libopenbci.a: openbci_c.o
+	ar ru $@ $^
+	ranlib $@
 
 clean:
-	rm -r *.o *.so 
+	-rm -r *.o *.a *.so test
 
-python:
-	gcc -Wall -fPIC -c openbci_c.c -std=gnu99
-	gcc -shared -Wl,-soname,libopenbci.so.1 -o openbci.so openbci_c.o 
+libopenbci.so: libopenbci.a
+	gcc -shared -Wl,-soname,libopenbci.so.1 -o $@ $^

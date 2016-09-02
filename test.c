@@ -1,32 +1,31 @@
 #include "openbci_c.h"
-#include "openbci_c.c"
 
 
-void main(){
+int main(){
   struct packet local_packet;
   int return_val = 0;
-  port = "/dev/ttyUSB0";
 
+  set_port("/dev/ttyUSB0");
   find_port();
-  //set_port(port);
 
 
   setup_port();
 
   while(1){
-    switch(isStreaming){
-      case FALSE:
-          parse_strings();
-          sleep(5);
-          start_stream();
-          break;
+    if (stream_started()){
 
-      case TRUE:
-          local_packet = streaming();
-          print_packet(local_packet);
-          break;
+      local_packet = streaming();
+      print_packet(local_packet);
+
+    }else{ // stream_started() == FALSE
+
+      parse_strings();
+      sleep(5);
+      start_stream();     
+
     }
   }
 
+  return return_val;
 }
 
