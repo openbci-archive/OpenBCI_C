@@ -66,18 +66,12 @@ static int open_port(char const* port){
 /**
 *     Function: obci_create
 *     ---------------------
-*     Allocates memory for an OpenBCI device/dongle context, initializes
-*     internal values, and establishes the serial port attributes, based
-*     on specifications of the OpenBCI Board communications and data format.
-*     Provide the name of the serial port that the dongle is connected to.
-*     E.g. 'COM1', '/dev/ttyUSB0', '/dev/ttyACM0'
-*     Opens the port specified.  Returns OBCI_SYSERROR if the open fails.
 */
 int obci_create(openbci_t** obci, char const* port){
 
   size_t portlen = strlen(port) + 1;
   struct termios serialportsettings;
-  int fd;
+  int fd, retval;
 
   // Try to open the port first
   fd = open_port(port);
@@ -86,8 +80,14 @@ int obci_create(openbci_t** obci, char const* port){
 
   // Initialize data structure
   *obci = malloc(sizeof(openbci_t));
+  if (*obci == 0){
+    close(fd);
+    return OBCI_SYSERROR;
+  }
   (*obci)->fd = fd;
   (*obci)->port = malloc(portlen);
+  if ((*obci)->port == 0)
+    goto fail;
   memcpy((*obci)->port, port, portlen);
   (*obci)->numBytesAdded = 0;
   (*obci)->lastIndex = 0;
@@ -98,7 +98,9 @@ int obci_create(openbci_t** obci, char const* port){
   (*obci)->dollaBills = 0;
 
   /* Serial port settings */
-  tcgetattr((*obci)->fd,&serialportsettings);
+  retval = tcgetattr((*obci)->fd,&serialportsettings);
+  if (retval == -1)
+    goto fail;
 
   cfsetispeed(&serialportsettings,B115200);                   // set the input baud rate
   cfsetospeed(&serialportsettings,B115200);                   // set the output baud rate 
@@ -127,11 +129,21 @@ int obci_create(openbci_t** obci, char const* port){
   serialportsettings.c_cc[VMIN]=1;                            // minimum of 1 byte per read
   serialportsettings.c_cc[VTIME]=0;                           // minimum of 0 seconds between reads
 
-  fcntl((*obci)->fd, F_SETFL, O_NDELAY|O_NONBLOCK );             // asynchronous settings
-  tcsetattr((*obci)->fd,TCSANOW,&serialportsettings);            // set the above attributes
-  tcflush((*obci)->fd, TCIOFLUSH);                               // flush the serial port
+  retval = fcntl((*obci)->fd, F_SETFL, O_NDELAY|O_NONBLOCK ); // asynchronous settings
+  if (retval == -1)
+    goto fail;
+  retval = tcsetattr((*obci)->fd,TCSANOW,&serialportsettings);// set the above attributes
+  if (retval == -1)
+    goto fail;
+  retval = tcflush((*obci)->fd, TCIOFLUSH);                   // flush the serial port
+  if (retval == -1)
+    goto fail;
 
   return OBCI_SUCCESS;
+
+fail:
+  obci_destroy(*obci);
+  return OBCI_SYSERROR;
 }
 
 /**
