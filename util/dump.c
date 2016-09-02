@@ -1,14 +1,19 @@
 #include "openbci_c.h"
 
-int main(){
-	find_port();
-	int fd = open_port();
-	setup_port();
+#include <unistd.h>
 
-	while(1) {
-		unsigned char buf[1];
-		int res;
-		res = read(fd, buf, 1);
-		write(STDOUT_FILENO, buf, res);
-	}
+int main(){
+  openbci_t* obci;
+  obci_create(&obci);
+  
+  find_port(obci);
+  int fd = open_port(obci);
+  setup_port(obci);
+  
+  while(1) {
+    unsigned char buf[1];
+    int res;
+    res = read(fd, buf, 1);
+    write(STDOUT_FILENO, buf, res);
+  }
 }

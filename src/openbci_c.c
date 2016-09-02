@@ -33,23 +33,52 @@ This program provides serial port communication with the OpenBCI Board.
 #define ADS1299_VREF 4.5
 #define ACCEL_SCALE_FAC (0.002 / pow(2,4))
 
+/*Device context*/
+struct openbci_t {
+  int fd;                                                // Serial port file descriptor
+  char* port;
+  int numBytesAdded;                                     //Used for determining if a packet was sent
+  int lastIndex;                                         //Used to place bytes into the buffer
+  int gain_setting;
+  int previous_sample;                                   //stos SIGSEGV error
+  struct sigaction saio;
+  int isStreaming;
+  
+  unsigned char parseBuffer[BUFFERSIZE];                 //Array of Unsigned Chars, initilized with the null-character ('\0')
+  
+  int dollaBills;                                        //Used to determine if a string was sent (depreciated?)
+};
 
-/*Global variables*/
-int fd;                                                // Serial port file descriptor
-char* port = "/dev/ttyUSB0";
-int numBytesAdded = 0;                                 //Used for determining if a packet was sent
-int lastIndex = 0;                                     //Used to place bytes into the buffer
-int gain_setting = 24;
-int previous_sample = 0;                               //stos SIGSEGV error
-struct sigaction saio;
-struct termios serialportsettings;
-int isStreaming = FALSE;
 
-unsigned char parseBuffer[BUFFERSIZE] = {'\0'};        //Array of Unsigned Chars, initilized with the null-character ('\0')
+/**
+*     Function: obci_create
+*     ---------------------
+*     Allocates memory for an OpenBCI device/dongle context, and
+*     initializes internal values.
+*
+*/
+void obci_create(openbci_t** obci){
+  (*obci) = malloc(sizeof(openbci_t));
+  (*obci)->port = "/dev/ttyUSB0";
+  (*obci)->numBytesAdded = 0;
+  (*obci)->lastIndex = 0;
+  (*obci)->gain_setting = 24;
+  (*obci)->previous_sample = 0;
+  (*obci)->isStreaming = FALSE;
+  memset((*obci)->parseBuffer, '\0', sizeof((*obci)->parseBuffer));
+  (*obci)->dollaBills = 0;
+}
 
-int dollaBills = 0;                                    //Used to determine if a string was sent (depreciated?)
-
-
+/**
+*     Function: obci_destroy
+*     ----------------------
+*     Frees resources associated with an OpenBCI device context.
+*     The context is invalid after this call.
+*
+*/
+void obci_destroy(openbci_t* obci){
+  free(obci);
+}
 
 /**
 *     Function: set_port
@@ -58,27 +87,35 @@ int dollaBills = 0;                                    //Used to determine if a 
 *     E.g. 'COM1', '/dev/ttyUSB0', '/dev/ttyACM0'
 *
 */
-void set_port(char* input){ 
-  port = input;
+void set_port(openbci_t* obci, char* input){ 
+  obci->port = input;
 }
 
 /**
 *     Function: open_port
-*     --------------------
+*     -------------------
 *     Opens the port specified by set_port()
 *     If the open initially fails, the function continues to try to open the port until success
 *
 *     TODO: How to handle serial connection errors. Does the continuously retrying ever work? 
 *           Should an error or -1 be returned after a while?
 */
-int open_port(){
-  int flags = O_RDWR | O_NOCTTY;         
-  fd = open(port, flags);
-  return fd;
+int open_port(openbci_t* obci){
+  int flags = O_RDWR | O_NOCTTY;          
+  obci->fd = open(obci->port, flags);
+  return obci->fd;
 }
 
 
-void find_port(){
+/**
+*     Function: find_port
+*     -------------------
+*     Probes the system for available ports and opens the first one it finds.
+*
+*     TODO: Detect OpenBCI
+*     TODO: implement platforms other than Linux
+*/
+void find_port(openbci_t* obci){
   //get values from the system itself (particularly utsname.sysname)
   struct utsname unameData;
   uname(&unameData);
@@ -92,8 +129,8 @@ void find_port(){
     while(repeat==TRUE){
       for(int i = 0; i < 34; i++){
         sprintf(stringLiteral, "/dev/ttyUSB%i",i);
-        set_port(stringLiteral);
-        return_val = open_port();
+        set_port(obci, stringLiteral);
+        return_val = open_port(obci);
         if(return_val == -1)
           printf("\nError opening on port /dev/ttyUSB%i %s\n",i,strerror(errno));  
         else
@@ -118,11 +155,15 @@ void find_port(){
 *     After establishing attributes, sends a 'v' to the board for a soft reset.
 *
 */
-void setup_port(){
-  tcgetattr(fd,&serialportsettings);
+void setup_port(openbci_t* obci){
+
   /* Serial port settings */
+  struct termios serialportsettings;
+  tcgetattr(obci->fd,&serialportsettings);
+
   cfsetispeed(&serialportsettings,B115200);                   // set the input baud rate
   cfsetospeed(&serialportsettings,B115200);                   // set the output baud rate 
+
   //Control Flags
   serialportsettings.c_cflag &= ~PARENB;                      // set the parity bit (none)
   serialportsettings.c_cflag &= ~CSTOPB;                      // # of stop bits = 1 (2 is default)
@@ -131,22 +172,26 @@ void setup_port(){
   serialportsettings.c_cflag |= CREAD;                        // turn on the receiver of the serial port (CREAD)
   serialportsettings.c_cflag |= CLOCAL;                       // no modem
   serialportsettings.c_cflag |= HUPCL;                        // drop DTR (i.e. hangup) on close
+
   //Input Data Flags
   serialportsettings.c_iflag = IGNPAR;                        // ignore parity errors
   serialportsettings.c_iflag &= ~(IXOFF | IXON | IXANY);      // ignore 'XOFF' and 'XON' command bits
+
   //Output Flags
   serialportsettings.c_oflag = 0;
+
   //Local Flags
   serialportsettings.c_lflag = 0;
+
   /*Special characters*/
 
   serialportsettings.c_cc[VMIN]=1;                            // minimum of 1 byte per read
   serialportsettings.c_cc[VTIME]=0;                           // minimum of 0 seconds between reads
 
-  fcntl(fd, F_SETFL, O_NDELAY|O_NONBLOCK );                   // asynchronous settings
-  tcsetattr(fd,TCSANOW,&serialportsettings);                  // set the above attributes
-  tcflush(fd, TCIOFLUSH);                                     // flush the serial port
-  send_to_board("v");                                         // reset the board
+  fcntl(obci->fd, F_SETFL, O_NDELAY|O_NONBLOCK );             // asynchronous settings
+  tcsetattr(obci->fd,TCSANOW,&serialportsettings);            // set the above attributes
+  tcflush(obci->fd, TCIOFLUSH);                               // flush the serial port
+  send_to_board(obci, 'v');                                   // reset the board
 }
 
 /**
@@ -155,7 +200,7 @@ void setup_port(){
 *     Parses string data from the board (board identification, registry information, etc)
 *
 */
-void parse_strings(){
+void parse_strings(openbci_t* obci){
   int res;
   unsigned char buf[1];
   int howLong = 0;
@@ -164,22 +209,22 @@ void parse_strings(){
 
   while(1){
     usleep(5);
-    res = read(fd,buf,1);
+    res = read(obci->fd,buf,1);
     
     if(res > 0){
       if(howLong < -1000 && wasTripped == FALSE){
           howLong = 0; 
           wasTripped = TRUE;
       }
-        bufferVal = buffer_handler(buf,isStreaming);
+        bufferVal = buffer_handler(obci,buf,obci->isStreaming);
     }
     else if(howLong < -1000 && wasTripped == TRUE){ bufferVal = 1; howLong = 0; wasTripped = FALSE;}
     else if(howLong >= -1000) howLong += res;
     else if(howLong < -1000 && wasTripped == FALSE) return;
  
-    if(bufferVal == 1) { print_string(); return;}
+    if(bufferVal == 1) { print_string(obci); return;}
     else if(bufferVal == 2) ; //char was sent... may be useful in the future
-    else if(bufferVal == 3) {isStreaming = TRUE; break;} // a packet was sent. parse it 
+    else if(bufferVal == 3) {obci->isStreaming = TRUE; break;} // a packet was sent. parse it 
     bufferVal = 0;
   }
   
@@ -193,11 +238,11 @@ void parse_strings(){
 *
 *
 */
-struct openbci_packet streaming(){
+openbci_packet_t streaming(openbci_t* obci){
   int res;
   unsigned char buf[1];
   int howLong = 0;
-  struct openbci_packet packet; //a packet so nice I named it twice :^)
+  openbci_packet_t packet; //a packet so nice I named it twice :^)
 
 
   /* Streaming loop */
@@ -205,20 +250,20 @@ struct openbci_packet streaming(){
   while (1) {
 
      usleep(1); //Sleep for 1 microsecond (helps CPU usage)
-     res = read(fd, buf,1);
+     res = read(obci->fd, buf,1);
      if(res > 0) {
        howLong = 0;
-       buffer_handler(buf,isStreaming);
+       buffer_handler(obci,buf,obci->isStreaming);
 
-       if(numBytesAdded >= 33){ 
-         packet = byte_parser(parseBuffer,33);
+       if(obci->numBytesAdded >= 33){ 
+         packet = byte_parser(obci,obci->parseBuffer,33);
          if(packet.isComplete == TRUE) return packet;
        }
      }
 
      else if (howLong < -1000){
-       clear_buffer();  
-       isStreaming = FALSE;
+       clear_buffer(obci);  
+       obci->isStreaming = FALSE;
        howLong = 0;
        break;
      }
@@ -235,8 +280,8 @@ struct openbci_packet streaming(){
 *     Closes the serial port
 *
 */
-int close_port(){
-    return close(fd);
+int close_port(openbci_t* obci){
+    return close(obci->fd);
 }
 
 /**
@@ -245,8 +290,8 @@ int close_port(){
 *     Sends bytes to board
 *
 */
-int send_to_board(char* message){
-    return write(fd,message,1);
+int send_to_board(openbci_t* obci, char message){
+    return write(obci->fd,&message,1);
 }
 
 
@@ -264,30 +309,30 @@ int send_to_board(char* message){
 *       0 for other data
 *      -1 for errors
 **/
-int buffer_handler(unsigned char buf[],int isStreaming){
-    if(lastIndex >= sizeof(parseBuffer)){
+int buffer_handler(openbci_t* obci, unsigned char buf[],int isStreaming){
+    if(obci->lastIndex >= sizeof(obci->parseBuffer)){
         printf("\nBuffer overflow !\n");
         return -1;
     }
-    if(isStreaming == FALSE){
-        parseBuffer[lastIndex] = buf[0];
-        lastIndex++;
+    if(obci->isStreaming == FALSE){
+        obci->parseBuffer[obci->lastIndex] = buf[0];
+        obci->lastIndex++;
         
         if(buf[0] == '$'){
           //there's a string coming in the future... need 3 though to print it.
-          dollaBills++;
+          obci->dollaBills++;
         }
-        else if(buf[0] != '$' && dollaBills > 0) dollaBills = 0; //Keeps them dolla bills in check :^)
+        else if(buf[0] != '$' && obci->dollaBills > 0) obci->dollaBills = 0; //Keeps them dolla bills in check :^)
 
-        if(dollaBills == 3){dollaBills = 0; return 1;} //must have printed a string...
+        if(obci->dollaBills == 3){obci->dollaBills = 0; return 1;} //must have printed a string...
         else if(isalpha(buf[0]) || buf[0] == '\n' || buf[0] == ' ') return 2;
         else if(buf[0] == 0xA0) return 3;
         else return 0;
     }
-    else if(isStreaming == TRUE){
-        parseBuffer[lastIndex] = buf[0];
-        lastIndex++;
-        numBytesAdded++;
+    else if(obci->isStreaming == TRUE){
+        obci->parseBuffer[obci->lastIndex] = buf[0];
+        obci->lastIndex++;
+        obci->numBytesAdded++;
     }
     return -1;
 }
@@ -302,39 +347,39 @@ int buffer_handler(unsigned char buf[],int isStreaming){
 *        0 if printing  
 *       -1 if "Error: No strings to print while streaming"
 */
-int print_string(){
-  if (isStreaming){
+int print_string(openbci_t* obci){
+  if (obci->isStreaming){
     perror("Error: No strings to print while streaming");
     return -1;
   }else{
-    for(int i = 0; i < lastIndex; i++){printf("%c",parseBuffer[i]); parseBuffer[i] = '\0';}
+    for(int i = 0; i < obci->lastIndex; i++){printf("%c",obci->parseBuffer[i]); obci->parseBuffer[i] = '\0';}
     printf("\n");
-    lastIndex = 0;
+    obci->lastIndex = 0;
     return 0;
   }
 }
 
 
 /* Shifts the buffer down by 1 index, clears the last index*/
-void shift_buffer_down(){
+void shift_buffer_down(openbci_t* obci){
 
-    lastIndex--;
-    numBytesAdded--;
+    obci->lastIndex--;
+    obci->numBytesAdded--;
 
-    for(int i = 0; i < lastIndex; i++) parseBuffer[i] = parseBuffer[i + 1];
-    parseBuffer[lastIndex] = '\0';
+    for(int i = 0; i < obci->lastIndex; i++) obci->parseBuffer[i] = obci->parseBuffer[i + 1];
+    obci->parseBuffer[obci->lastIndex] = '\0';
 }
 
 /* Clears the buffer */
-void clear_buffer(){
+void clear_buffer(openbci_t* obci){
 
-    for(int i = 0; i < lastIndex; i++) parseBuffer[i] = '\0';
-    lastIndex = 0;
-    numBytesAdded = 0;
+    for(int i = 0; i < obci->lastIndex; i++) obci->parseBuffer[i] = '\0';
+    obci->lastIndex = 0;
+    obci->numBytesAdded = 0;
 }
 
 /* Prints the packet passed to it */
-void print_packet(struct openbci_packet p){
+void print_packet(openbci_packet_t p){
     printf("\nSAMPLE NUMBER %g\n",p.output[0]);
     int acc_channel = 0;
     
@@ -350,8 +395,8 @@ void print_packet(struct openbci_packet p){
 *    Return: TRUE if already started
 *            FALSE if not streaming
 */
-int stream_started(){
-  return isStreaming;
+int stream_started(openbci_t* obci){
+  return obci->isStreaming;
 }
 
 /*
@@ -362,14 +407,14 @@ int stream_started(){
 *    Return: 0 if called send_to_board
 *           -1 if "Error: Already streaming"
 */
-int start_stream(){
-  if (isStreaming == TRUE){
+int start_stream(openbci_t* obci){
+  if (obci->isStreaming == TRUE){
     perror("Error: Already streaming");
     return -1;
   }else{
     printf("Starting stream...");
-    send_to_board("b");
-    isStreaming = TRUE;
+    send_to_board(obci, 'b');
+    obci->isStreaming = TRUE;
     return 0;
   }
 }
@@ -382,13 +427,13 @@ int start_stream(){
 *    Return: 0 if called to send_to_board
 *           -1 if "Error: Not current streaming"
 */
-int stop_stream(){
-  if (isStreaming == FALSE){
+int stop_stream(openbci_t * obci){
+  if (obci->isStreaming == FALSE){
     perror("Error: Not currently streaming");
     return -1;
   }else{
-    send_to_board("s");
-    isStreaming = FALSE;
+    send_to_board(obci, 's');
+    obci->isStreaming = FALSE;
     return 0;
   }
 }
@@ -399,34 +444,34 @@ int stop_stream(){
 *    Parses the incoming bytes during streaming
 *
 */
-struct openbci_packet byte_parser (unsigned char buf[], int res){
+openbci_packet_t byte_parser (openbci_t* obci, unsigned char buf[], int res){
   static int channel_number = 0;                              // channel number (0-7)
   static int acc_channel = 0;                                 // accelerometer channel (0-2)
   static int byte_count = 0;                                  // keeps track of channel bytes as we parse
   static int temp_val = 0;                                    // holds the value while converting channel values from 24 to 32 bit integers
   static float temp_float = 0.0;
-  struct openbci_packet packet;           // buffer to hold the output of the parse (all -data- bytes of one sample)
+  openbci_packet_t packet;           // buffer to hold the output of the parse (all -data- bytes of one sample)
   int parse_state = 0;                                        // state of the parse machine (0-5)
   int is_parsing = TRUE; 
 
 
  
-  if(buf[0] != 0xA0){ shift_buffer_down(); is_parsing=FALSE; }
+  if(buf[0] != 0xA0){ shift_buffer_down(obci); is_parsing=FALSE; }
   else if(buf[0] == 0xA0) parse_state = 1;
 
 
   
-  while(is_parsing == TRUE && lastIndex > 1){
+  while(is_parsing == TRUE && obci->lastIndex > 1){
     switch(parse_state){
 
     case 1:
-        shift_buffer_down();
+        shift_buffer_down(obci);
     
-        int sample_num = parseBuffer[0];
-        if(sample_num - previous_sample > 20  || 
-           sample_num == previous_sample ) { packet.isComplete = FALSE; return packet;}
+        int sample_num = obci->parseBuffer[0];
+        if(sample_num - obci->previous_sample > 20  || 
+           sample_num == obci->previous_sample ) { packet.isComplete = FALSE; return packet;}
         
-        previous_sample = sample_num;
+        obci->previous_sample = sample_num;
 
         packet.output[0] = sample_num;
         parse_state++;
@@ -434,8 +479,8 @@ struct openbci_packet byte_parser (unsigned char buf[], int res){
         break;
 
     case 2:
-        shift_buffer_down();
-        temp_val |= (((unsigned int)parseBuffer[0]) << (16 - (byte_count*8)));
+        shift_buffer_down(obci);
+        temp_val |= (((unsigned int)obci->parseBuffer[0]) << (16 - (byte_count*8)));
         byte_count++;
         if(byte_count == 3){
 
@@ -444,7 +489,7 @@ struct openbci_packet byte_parser (unsigned char buf[], int res){
                 }
                 else temp_val &= 0x00FFFFFF;
             //convert from counts to uVolts
-            temp_val = (ADS1299_VREF/gain_setting/(pow(2,23) - 1) * 1000000.f) * temp_val; 
+            temp_val = (ADS1299_VREF/obci->gain_setting/(pow(2,23) - 1) * 1000000.f) * temp_val; 
             packet.output[++channel_number] = temp_val;
             
 
@@ -464,8 +509,8 @@ struct openbci_packet byte_parser (unsigned char buf[], int res){
         break;
 
     case 3:
-        shift_buffer_down();
-        temp_val |= (((unsigned int)parseBuffer[0]) << (8 - (byte_count*8)));
+        shift_buffer_down(obci);
+        temp_val |= (((unsigned int)obci->parseBuffer[0]) << (8 - (byte_count*8)));
         byte_count++;
 
         if (byte_count==2) {
@@ -488,8 +533,8 @@ struct openbci_packet byte_parser (unsigned char buf[], int res){
         break;
 
     case 4:
-        shift_buffer_down();
-        if(parseBuffer[0] == 0xC0){packet.isComplete = TRUE;return packet;}
+        shift_buffer_down(obci);
+        if(obci->parseBuffer[0] == 0xC0){packet.isComplete = TRUE;return packet;}
     }
 
 

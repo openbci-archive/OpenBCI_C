@@ -4,29 +4,33 @@
 
 
 int main(){
-  struct openbci_packet local_packet;
+  openbci_packet_t local_packet;
+  openbci_t * obci;
   int return_val = 0;
 
-  set_port("/dev/ttyUSB0");
-  find_port();
+  obci_create(&obci);
+  set_port(obci, "/dev/ttyUSB0");
+  find_port(obci);
 
 
-  setup_port();
+  setup_port(obci);
 
   while(1){
-    if (stream_started()){
+    if (stream_started(obci)){
 
-      local_packet = streaming();
+      local_packet = streaming(obci);
       print_packet(local_packet);
 
     }else{ // stream_started() == FALSE
 
-      parse_strings();
+      parse_strings(obci);
       sleep(5);
-      start_stream();     
+      start_stream(obci);
 
     }
   }
+
+  obci_destroy(obci);
 
   return return_val;
 }

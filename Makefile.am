@@ -6,6 +6,10 @@ lib_LTLIBRARIES = libopenbci.la
 libopenbci_la_SOURCES = src/openbci_c.c
 include_HEADERS = include/openbci_c.h
 
-noinst_PROGRAMS = test
-test_LDADD = -lopenbci
+noinst_PROGRAMS = test dump
+
+test_LDADD = libopenbci.la
 test_SOURCES = util/test.c
+
+dump_LDADD = libopenbci.la
+dump_SOURCES = util/dump.c
