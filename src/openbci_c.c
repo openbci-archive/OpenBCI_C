@@ -49,6 +49,11 @@ struct openbci_t {
   int dollaBills;                                        //Used to determine if a string was sent (depreciated?)
 };
 
+static void obci_clear_buffer(openbci_t* obci);
+static void obci_shift_buffer_down(openbci_t* obci);
+static int obci_buffer_handler(openbci_t* obci, unsigned char buf[], int isStreaming);
+static openbci_packet_t obci_byte_parser(openbci_t* obci, unsigned char buf[], int res);
+
 /**
 *     Function: open_port
 *     --------------------
@@ -66,6 +71,7 @@ static int open_port(char const* port){
 /**
 *     Function: obci_create
 *     ---------------------
+*
 */
 int obci_create(openbci_t** obci, char const* port){
 
@@ -149,9 +155,6 @@ fail:
 /**
 *     Function: obci_destroy
 *     ----------------------
-*     Frees resources associated with an OpenBCI device context and
-*     closes the serial port.
-*     The context is invalid after this call.
 *
 */
 void obci_destroy(openbci_t* obci){
@@ -163,7 +166,6 @@ void obci_destroy(openbci_t* obci){
 /**
 *     Function: obci_reset
 *     --------------------
-*     Sends a 'v' to the board for a soft reset.
 *
 */
 void obci_reset(openbci_t* obci){
@@ -173,8 +175,7 @@ void obci_reset(openbci_t* obci){
 /**
 *     Function: obci_fd
 *     -----------------
-*     Returns the open file descriptor for the port associated with a
-*     device context.  For debugging.
+*
 */
 int obci_fd(openbci_t* obci){
   return obci->fd;
@@ -183,7 +184,6 @@ int obci_fd(openbci_t* obci){
 /**
 *     Function: obci_find_port
 *     ------------------------
-*     Probes the system for available ports and returns the first one it finds.  The string is stored statically.
 *
 *     TODO: Detect OpenBCI
 *     TODO: implement platforms other than Linux
@@ -306,11 +306,14 @@ openbci_packet_t obci_streaming(openbci_t* obci){
 /**
 *     Function: obci_send_to_board
 *     ----------------------------
-*     Sends bytes to board
 *
 */
 int obci_send_to_board(openbci_t* obci, char message){
-    return write(obci->fd,&message,1);
+  int retval = write(obci->fd,&message,1);
+  if (retval == -1)
+    return OBCI_SYSERROR;
+  else
+    return OBCI_SUCCESS;
 }
 
 
@@ -411,8 +414,6 @@ void obci_print_packet(openbci_packet_t p){
 /*
 *    Function: obci_stream_started
 *    -----------------------------
-*    Return: TRUE if already started
-*            FALSE if not streaming
 */
 int obci_stream_started(openbci_t* obci){
   return obci->isStreaming;
@@ -421,39 +422,31 @@ int obci_stream_started(openbci_t* obci){
 /*
 *    Function: obci_start_stream
 *    ---------------------------
-*    Starts streaming data from the OpenBCI Board.
-*
-*    Return: 0 if called send_to_board
-*           -1 if "Error: Already streaming"
 */
 int obci_start_stream(openbci_t* obci){
   if (obci->isStreaming == TRUE){
-    perror("Error: Already streaming");
-    return -1;
+    fprintf(stderr, "Warning: Already streaming");
+    return OBCI_FUTILE;
   }else{
     printf("Starting stream...");
     obci_send_to_board(obci, 'b');
     obci->isStreaming = TRUE;
-    return 0;
+    return OBCI_SUCCESS;
   }
 }
 
 /*
 *    Function: obci_stop_stream
 *    --------------------------
-*    Stop streaming data from the OpenBCI Board.
-*
-*    Return: 0 if called to send_to_board
-*           -1 if "Error: Not current streaming"
 */
 int obci_stop_stream(openbci_t * obci){
   if (obci->isStreaming == FALSE){
-    perror("Error: Not currently streaming");
-    return -1;
+    fprintf(stderr, "Warning: Not currently streaming");
+    return OBCI_FUTILE;
   }else{
     obci_send_to_board(obci, 's');
     obci->isStreaming = FALSE;
-    return 0;
+    return OBCI_SUCCESS;
   }
 }
 
