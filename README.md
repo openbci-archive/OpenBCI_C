@@ -12,8 +12,16 @@ This library is not maintained by OpenBCI, but everyone is welcome to work on it
 
 ## Building
 
+If building from git, automake and autoconf are required to create the
+configure script.
+
 ```
 ./autogen.sh
+```
+
+Then:
+
+```
 ./configure
 make
 ```
