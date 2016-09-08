@@ -1,6 +1,9 @@
 # OpenBCI_C
 
-C driver for OpenBCI boards.  A work in progress.
+C driver for OpenBCI boards.
+
+This is very immature.  More work has occured in the nodejs driver.
+See https://github.com/OpenBCI/OpenBCI_NodeJS
 
 ## Community Built Library
 
