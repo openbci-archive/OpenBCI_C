@@ -28,7 +28,7 @@ int dollaBills = 0;                                    //Used to determine if a 
 *     Function: set_port
 *     --------------------
 *     Sets the name of the serial port that the dongle is connected to.
-*     E.g. 'COM1', '/dev/ttyUSB0'
+*     E.g. 'COM1', '/dev/ttyUSB0', '/dev/ttyACM0'
 *
 */
 void set_port(char* input){ 
@@ -45,7 +45,7 @@ void set_port(char* input){
 *           Should an error or -1 be returned after a while?
 */
 int open_port(){
-  int flags = O_RDWR | O_NOCTTY;          
+  int flags = O_RDWR | O_NOCTTY;         
   fd = open(port, flags);
   return fd;
 }
@@ -65,14 +65,14 @@ void find_port(){
     while(repeat==TRUE){
       for(int i = 0; i < 34; i++){
          TRY{
-           sprintf(stringLiteral, "/dev/ttyUSB%i",i);
+           sprintf(stringLiteral, "/dev/ttyUSB%i",i );
            set_port(stringLiteral);
            return_val = open_port();
            if(return_val == -1) THROW;
            else return;
          }
          CATCH{
-           printf("\nError opening on port /dev/ttyUSB%i",i);  
+           printf("\nError opening on port /dev/ttyUSB%i %s\n",i , strerror(errno));  
          }
          ETRY;
       }
