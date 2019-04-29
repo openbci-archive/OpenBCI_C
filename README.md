@@ -2,6 +2,11 @@
 
 C driver for OpenBCI boards.  Currently only prints out information.
 
+## Community Built Library
+
+This library is not maintained by OpenBCI, but everyone is welcome to work on it in any capacity. Just send a pull request and we'll merge it. Try not to break anything! :)
+
+
 ## Building
 
 `make test` will build the test application.
